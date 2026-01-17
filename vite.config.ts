@@ -3,11 +3,17 @@ import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
 import { defineConfig } from 'vite'
 import { DevTools } from '@vitejs/devtools'
-import storybookPlugin from './src/storybook-plugin'
+import componentHighlighterPlugin from './src/component-highlighter-plugin'
 
 export default defineConfig({
   root: './playground',
-  plugins: [react(), DevTools(), storybookPlugin()],
+  plugins: [
+    react(),
+    DevTools(),
+    componentHighlighterPlugin({
+      debugMode: true,
+    }),
+  ].filter(Boolean),
   build: {
     rolldownOptions: {
       devtools: {}, // enable devtools mode

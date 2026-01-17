@@ -8,6 +8,18 @@ importers:
 
   .:
     dependencies:
+      '@babel/generator':
+        specifier: ^7.28.6
+        version: 7.28.6
+      '@babel/parser':
+        specifier: ^7.28.6
+        version: 7.28.6
+      '@babel/traverse':
+        specifier: ^7.28.6
+        version: 7.28.6
+      '@babel/types':
+        specifier: ^7.28.6
+        version: 7.28.6
       react:
         specifier: ^19.2.0
         version: 19.2.3

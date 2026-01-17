@@ -1,6 +1,8 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  platform: 'neutral',
-  // ...config options
+  entry: ['src/index.ts', 'src/component-highlighter-plugin.ts'],
+  format: ['esm'],
+  dts: true,
+  external: ['vite', '@babel/parser', '@babel/traverse', '@babel/generator', '@babel/types'],
 })
