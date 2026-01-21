@@ -1,9 +1,13 @@
 /// <reference types="@vitejs/devtools-kit" />
-import type { Plugin } from 'vite'
+import type { Plugin, ViteDevServer } from 'vite'
 import { createFilter } from 'vite'
 import { transform } from './transform'
 import { setupVirtualModule } from './virtual-module'
+import type { SerializedProps } from './virtual-module'
+import { generateStory } from './story-generator'
 import { defineRpcFunction } from '@vitejs/devtools-kit'
+import * as fs from 'fs'
+import * as path from 'path'
 
 // RPC function type declarations
 declare module '@vitejs/devtools-kit' {
@@ -21,8 +25,10 @@ interface ComponentHighlightData {
     componentName: string
     filePath: string
     sourceId: string
+    isDefaultExport?: boolean
   }
   props: Record<string, unknown>
+  serializedProps?: SerializedProps
   rect: DOMRect
 }
 
@@ -31,8 +37,12 @@ interface ComponentStoryData {
     componentName: string
     filePath: string
     sourceId: string
+    isDefaultExport?: boolean
   }
   props: Record<string, unknown>
+  serializedProps?: SerializedProps
+  /** Component registry for import resolution: componentName -> filePath */
+  componentRegistry?: Record<string, string>
 }
 
 export interface ComponentHighlighterOptions {
@@ -71,6 +81,16 @@ export interface ComponentHighlighterOptions {
    * @default false
    */
   debugMode?: boolean
+  /**
+   * Automatically write story files when "Create Story" is clicked
+   * @default true
+   */
+  writeStoryFiles?: boolean
+  /**
+   * Custom directory for story files (relative to component)
+   * If not set, stories are created next to the component
+   */
+  storiesDir?: string
 }
 
 export default function componentHighlighterPlugin(
@@ -84,10 +104,13 @@ export default function componentHighlighterPlugin(
     devtoolsDockId = 'component-highlighter',
     force = false,
     debugMode = false,
+    writeStoryFiles = true,
+    storiesDir,
   } = options
 
   const filter = createFilter(include, exclude)
   let isServe = false
+  let server: ViteDevServer | undefined
 
   return {
     name: 'vite-plugin-component-highlighter',
@@ -104,6 +127,9 @@ export default function componentHighlighterPlugin(
           '[vite-plugin-component-highlighter] React plugin not detected. Make sure to add @vitejs/plugin-react to your Vite config.'
         )
       }
+    },
+    configureServer(srv) {
+      server = srv
     },
     devtools: {
       setup(ctx) {
@@ -155,6 +181,71 @@ export default function componentHighlighterPlugin(
               handler: (data: ComponentStoryData) => {
                 // This will be called when creating a story from the component
                 console.log('[DevTools] Create story:', data)
+
+                // Generate and write the story file
+                if (writeStoryFiles && data.serializedProps) {
+                  try {
+                    // Convert component registry from object to Map
+                    const registryMap = new Map<string, string>()
+                    if (data.componentRegistry) {
+                      for (const [name, filePath] of Object.entries(
+                        data.componentRegistry
+                      )) {
+                        registryMap.set(name, filePath)
+                      }
+                    }
+
+                    const story = generateStory({
+                      meta: {
+                        componentName: data.meta.componentName,
+                        filePath: data.meta.filePath,
+                        sourceId: data.meta.sourceId,
+                        isDefaultExport: data.meta.isDefaultExport ?? false,
+                      },
+                      props: data.serializedProps,
+                      componentRegistry: registryMap,
+                    })
+
+                    // Determine the output path
+                    let outputPath = story.filePath
+                    if (storiesDir) {
+                      const componentDir = path.dirname(data.meta.filePath)
+                      const storyFileName = path.basename(story.filePath)
+                      outputPath = path.join(
+                        componentDir,
+                        storiesDir,
+                        storyFileName
+                      )
+                    }
+
+                    // Ensure the directory exists
+                    const outputDir = path.dirname(outputPath)
+                    if (!fs.existsSync(outputDir)) {
+                      fs.mkdirSync(outputDir, { recursive: true })
+                    }
+
+                    // Write the story file
+                    fs.writeFileSync(outputPath, story.content, 'utf-8')
+                    console.log(
+                      `[DevTools] Story file created: ${outputPath}`
+                    )
+
+                    // Notify the client about the created file
+                    if (server) {
+                      server.ws.send({
+                        type: 'custom',
+                        event: 'component-highlighter:story-created',
+                        data: {
+                          filePath: outputPath,
+                          componentName: data.meta.componentName,
+                        },
+                      })
+                    }
+                  } catch (error) {
+                    console.error('[DevTools] Failed to create story:', error)
+                  }
+                }
+
                 // Dispatch custom event that can be listened to by external tools (like Storybook)
                 const event = new CustomEvent(eventName, {
                   detail: data,

@@ -64,6 +64,7 @@
     "@babel/parser": "^7.28.6",
     "@babel/traverse": "^7.28.6",
     "@babel/types": "^7.28.6",
-    "nanoevents": "^9.0.0"
+    "nanoevents": "^9.0.0",
+    "react-element-to-jsx-string": "^15.0.0"
   }
 }

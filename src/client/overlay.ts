@@ -1,4 +1,4 @@
-import type { ComponentInstance } from '../virtual-module'
+import type { ComponentInstance, SerializedProps } from '../virtual-module'
 import type { Emitter } from 'nanoevents'
 import { createNanoEvents } from 'nanoevents'
 
@@ -7,6 +7,8 @@ export interface OverlayEvents {
   'log-info': (data: {
     meta: ComponentInstance['meta']
     props: Record<string, unknown>
+    serializedProps?: SerializedProps
+    componentRegistry?: Record<string, string>
   }) => void
 }
 
@@ -29,6 +31,16 @@ let componentRegistry: Map<string, ComponentInstance>
 // Function to set component registry reference
 export function setComponentRegistry(registry: Map<string, ComponentInstance>) {
   componentRegistry = registry
+}
+
+// Helper to escape HTML for safe display
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 // Canvas overlay management
@@ -137,6 +149,7 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
 
   const meta = instance.meta
   const props = instance.props
+  const serializedProps = instance.serializedProps
 
   contextMenuElement = document.createElement('div')
   contextMenuElement.style.cssText = `
@@ -154,29 +167,46 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
     font-size: 14px;
   `
 
-  const propsHtml = Object.entries(props)
-    .map(
-      ([key, value]) =>
-        `<div style="font-family: monospace; background: #222222; padding: 2px 6px; border-radius: 3px; margin: 2px; display: inline-block; font-size: 12px;">${key}=${JSON.stringify(
-          value
-        )}</div>`
-    )
+  // Use serialized props for display if available, otherwise fall back to raw props
+  const displayProps = serializedProps || props
+  const propsHtml = Object.entries(displayProps)
+    .map(([key, value]) => {
+      // Check if this is a serialized JSX value
+      if (
+        value &&
+        typeof value === 'object' &&
+        '__isJSX' in value &&
+        (value as { __isJSX: boolean }).__isJSX
+      ) {
+        const jsxValue = value as unknown as { __isJSX: true; source: string }
+        return `<div style="font-family: monospace; background: #1e3a5f; color: #93c5fd; padding: 2px 6px; border-radius: 3px; margin: 2px; display: inline-block; font-size: 12px;" title="${escapeHtml(jsxValue.source)}">${key}=&lt;JSX&gt;</div>`
+      }
+      // Check if this is a function placeholder
+      if (
+        value &&
+        typeof value === 'object' &&
+        '__isFunction' in value
+      ) {
+        return `<div style="font-family: monospace; background: #4a3728; color: #fbbf24; padding: 2px 6px; border-radius: 3px; margin: 2px; display: inline-block; font-size: 12px;">${key}=&lt;fn&gt;</div>`
+      }
+      return `<div style="font-family: monospace; background: #222222; color: white; padding: 2px 6px; border-radius: 3px; margin: 2px; display: inline-block; font-size: 12px;">${key}=${JSON.stringify(
+        value
+      )}</div>`
+    })
     .join('')
 
   contextMenuElement.innerHTML = `
     <div style="padding: 12px;">
-      <div style="font-weight: bold; color: #2563eb; margin-bottom: 8px;">${
-        meta.componentName
-      }</div>
-      <div style="color: #6b7280; font-size: 12px; margin-bottom: 8px;">${
-        meta.filePath
-      }</div>
+      <div style="font-weight: bold; color: #2563eb; margin-bottom: 8px;">${meta.componentName
+    }</div>
+      <div style="color: #6b7280; font-size: 12px; margin-bottom: 8px;">${meta.filePath
+    }</div>
       <div style="margin-bottom: 8px;">
         <div style="font-weight: bold; margin-bottom: 4px;">Props:</div>
         <div>${propsHtml || '<span style="color: #9ca3af;">none</span>'}</div>
       </div>
-      <button id="log-info-btn" style="background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-        Log Info
+      <button id="create-story-btn" style="background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+        Create Story
       </button>
     </div>
     <div style="position: absolute; bottom: -6px; left: 20px; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid white; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));"></div>
@@ -184,23 +214,48 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
 
   document.body.appendChild(contextMenuElement)
 
-  // Add click handler for the log button
-  const logBtn = contextMenuElement.querySelector(
-    '#log-info-btn'
+  // Add click handler for the create story button
+  const createStoryBtn = contextMenuElement.querySelector(
+    '#create-story-btn'
   ) as HTMLButtonElement
-  logBtn.addEventListener('click', () => {
-    const componentInfo = {
+  createStoryBtn.addEventListener('click', () => {
+    // Get the component registry for import resolution
+    const getRegistry = (window as unknown as { __componentHighlighterGetRegistry?: () => Map<string, string> }).__componentHighlighterGetRegistry
+    let componentRegistryObj: Record<string, string> = {}
+    if (getRegistry) {
+      const registry = getRegistry()
+      componentRegistryObj = Object.fromEntries(registry)
+    }
+
+    const componentInfo: {
+      meta: typeof meta
+      props: typeof props
+      serializedProps: SerializedProps | undefined
+      componentRegistry: Record<string, string>
+    } = {
       meta,
       props,
+      serializedProps,
+      componentRegistry: componentRegistryObj,
     }
 
     console.log('Component Info:', componentInfo)
 
     // Emit event that vite-devtools client script can listen to (when dock is active)
     console.log('Emitting log-info event:', componentInfo)
-    overlayEvents.emit('log-info', componentInfo)
+    overlayEvents.emit('log-info', componentInfo as Parameters<typeof overlayEvents.emit<'log-info'>>[1])
 
-    // Don't hide context menu - let it stay open until clicked outside
+    // Show feedback
+    createStoryBtn.textContent = 'Creating...'
+    createStoryBtn.disabled = true
+
+    // Reset button after a short delay
+    setTimeout(() => {
+      if (createStoryBtn) {
+        createStoryBtn.textContent = 'Create Story'
+        createStoryBtn.disabled = false
+      }
+    }, 2000)
   })
 
   // Close on click outside

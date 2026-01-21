@@ -59,10 +59,13 @@ if (typeof window !== 'undefined') {
   window.addEventListener('component-highlighter:update-props', ((
     event: CustomEvent
   ) => {
-    const { id, props } = event.detail
+    const { id, props, serializedProps } = event.detail
     const instance = componentRegistry.get(id)
     if (instance) {
       instance.props = props
+      if (serializedProps) {
+        instance.serializedProps = serializedProps
+      }
     }
   }) as EventListener)
 }
@@ -160,10 +163,10 @@ const handleMouseMove = debounce((event: MouseEvent) => {
       'component-highlighter:highlight-target',
       instance
         ? {
-            meta: instance.meta,
-            props: instance.props,
-            rect: instance.rect,
-          }
+          meta: instance.meta,
+          props: instance.props,
+          rect: instance.rect,
+        }
         : null
     )
   }
@@ -306,13 +309,13 @@ if (typeof window !== 'undefined') {
 
 // Export for debugging
 if (typeof window !== 'undefined') {
-  ;(window as any).__componentHighlighterRegistry = componentRegistry
-  ;(window as any).__componentHighlighterToggle = () => {
-    const enabled = toggleHighlightAll()
-    return enabled
-  }
-  ;(window as any).__componentHighlighterDraw = () => {
-    enableOverlay()
-    updateInstanceRects()
-  }
+  ; (window as any).__componentHighlighterRegistry = componentRegistry
+    ; (window as any).__componentHighlighterToggle = () => {
+      const enabled = toggleHighlightAll()
+      return enabled
+    }
+    ; (window as any).__componentHighlighterDraw = () => {
+      enableOverlay()
+      updateInstanceRects()
+    }
 }

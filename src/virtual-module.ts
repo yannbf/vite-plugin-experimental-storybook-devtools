@@ -11,8 +11,20 @@ export interface ComponentInstance {
   id: string
   meta: ComponentMeta
   props: Record<string, unknown>
+  /** Serialized props with JSX converted to source strings */
+  serializedProps?: SerializedProps
   rect?: DOMRect
   element: HTMLElement
+}
+
+export interface JSXSerializedValue {
+  __isJSX: true
+  source: string
+  componentRefs: string[]
+}
+
+export interface SerializedProps {
+  [key: string]: JSXSerializedValue | unknown
 }
 
 export interface HighlighterOptions {
@@ -25,6 +37,7 @@ export interface HighlighterOptions {
 export function setupVirtualModule(options: HighlighterOptions): string {
   return `
 import React, { createElement, useEffect, useRef, useState } from 'react'
+import reactElementToJSXString from 'react-element-to-jsx-string'
 
 const DEBUG_MODE = ${options.debugMode ? 'true' : 'false'}
 const logDebug = (...args) => {
@@ -43,14 +56,161 @@ function generateInstanceId(sourceId) {
   return \`\${sourceId}:\${Math.random().toString(36).substr(2, 9)}\`
 }
 
+/**
+ * Get the display name of a React element's type
+ */
+function getComponentName(type) {
+  if (typeof type === 'string') return type // DOM element
+  if (typeof type === 'function') {
+    return type.displayName || type.name || 'Unknown'
+  }
+  if (type && typeof type === 'object') {
+    // Handle React.memo, React.forwardRef, etc.
+    if (type.displayName) return type.displayName
+    if (type.render && type.render.displayName) return type.render.displayName
+    if (type.type) return getComponentName(type.type)
+  }
+  return 'Unknown'
+}
+
+/**
+ * Extract component references from a React element tree
+ */
+function extractComponentRefs(element, refs = new Set()) {
+  if (!React.isValidElement(element)) return refs
+  
+  const type = element.type
+  const name = getComponentName(type)
+  
+  // Only track non-DOM components (capitalized names)
+  if (typeof type !== 'string' && name && name[0] === name[0].toUpperCase()) {
+    refs.add(name)
+  }
+  
+  // Recursively check children
+  const children = element.props?.children
+  if (children) {
+    if (Array.isArray(children)) {
+      children.forEach(child => extractComponentRefs(child, refs))
+    } else if (React.isValidElement(children)) {
+      extractComponentRefs(children, refs)
+    }
+  }
+  
+  // Check other props that might contain JSX
+  Object.entries(element.props || {}).forEach(([key, value]) => {
+    if (key !== 'children' && React.isValidElement(value)) {
+      extractComponentRefs(value, refs)
+    }
+  })
+  
+  return refs
+}
+
+/**
+ * Serialize props, converting JSX elements to source strings
+ */
+function serializeProps(props) {
+  const serialized = {}
+  
+  for (const [key, value] of Object.entries(props)) {
+    serialized[key] = serializeValue(value)
+  }
+  
+  return serialized
+}
+
+/**
+ * Serialize a single value, handling JSX elements specially
+ */
+function serializeValue(value) {
+  // Handle React elements (JSX)
+  if (React.isValidElement(value)) {
+    try {
+      const source = reactElementToJSXString(value, {
+        showDefaultProps: false,
+        showFunctions: true,
+        sortProps: true,
+        useBooleanShorthandSyntax: true,
+        useFragmentShortSyntax: true,
+      })
+      const componentRefs = Array.from(extractComponentRefs(value))
+      return {
+        __isJSX: true,
+        source,
+        componentRefs,
+      }
+    } catch (err) {
+      logDebug('Failed to serialize JSX element:', err)
+      return { __isJSX: true, source: '{/* Failed to serialize */}', componentRefs: [] }
+    }
+  }
+  
+  // Handle arrays that may contain JSX
+  if (Array.isArray(value)) {
+    const hasJSX = value.some(item => React.isValidElement(item))
+    if (hasJSX) {
+      try {
+        // Wrap in fragment for serialization
+        const fragment = React.createElement(React.Fragment, null, ...value)
+        const source = reactElementToJSXString(fragment, {
+          showDefaultProps: false,
+          showFunctions: true,
+          sortProps: true,
+          useBooleanShorthandSyntax: true,
+          useFragmentShortSyntax: true,
+        })
+        
+        // Collect all component refs from the array
+        const componentRefs = new Set()
+        value.forEach(item => {
+          if (React.isValidElement(item)) {
+            extractComponentRefs(item, componentRefs)
+          }
+        })
+        
+        return {
+          __isJSX: true,
+          source,
+          componentRefs: Array.from(componentRefs),
+        }
+      } catch (err) {
+        logDebug('Failed to serialize JSX array:', err)
+        return { __isJSX: true, source: '{/* Failed to serialize */}', componentRefs: [] }
+      }
+    }
+    // Regular array - recursively serialize
+    return value.map(item => serializeValue(item))
+  }
+  
+  // Handle plain objects (but not null)
+  if (value !== null && typeof value === 'object' && value.constructor === Object) {
+    const serialized = {}
+    for (const [k, v] of Object.entries(value)) {
+      serialized[k] = serializeValue(v)
+    }
+    return serialized
+  }
+  
+  // Handle functions - return a placeholder
+  if (typeof value === 'function') {
+    return { __isFunction: true, name: value.name || 'anonymous' }
+  }
+  
+  // Primitives and other values pass through
+  return value
+}
+
 // Registry management functions
 export function registerInstance(meta, props, element) {
   const id = generateInstanceId(meta.sourceId)
+  const serializedProps = serializeProps(props)
 
   const instance = {
     id,
     meta,
     props,
+    serializedProps,
     element,
   }
   componentRegistry.set(id, instance)
@@ -87,12 +247,32 @@ export function updateInstanceProps(id, props) {
   const instance = componentRegistry.get(id)
   if (instance) {
     instance.props = props
+    instance.serializedProps = serializeProps(props)
     logDebug('updateInstanceProps', { id, props })
 
     // Dispatch event for listeners module
-    const event = new CustomEvent('component-highlighter:update-props', { detail: { id, props } })
+    const event = new CustomEvent('component-highlighter:update-props', { 
+      detail: { id, props, serializedProps: instance.serializedProps } 
+    })
     window.dispatchEvent(event)
   }
+}
+
+/**
+ * Get the component registry for import resolution
+ * Returns a map of component name -> file path
+ */
+export function getComponentRegistry() {
+  const registry = new Map()
+  for (const instance of componentRegistry.values()) {
+    registry.set(instance.meta.componentName, instance.meta.filePath)
+  }
+  return registry
+}
+
+// Expose registry getter globally for story generation
+if (typeof window !== 'undefined') {
+  window.__componentHighlighterGetRegistry = getComponentRegistry
 }
 
 
