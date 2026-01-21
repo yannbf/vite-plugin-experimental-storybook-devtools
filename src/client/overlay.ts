@@ -1,4 +1,4 @@
-import type { ComponentInstance, SerializedProps } from '../virtual-module'
+import type { ComponentInstance, SerializedProps } from '../frameworks/types'
 import type { Emitter } from 'nanoevents'
 import { createNanoEvents } from 'nanoevents'
 
@@ -151,6 +151,20 @@ function removeHighlightContainer() {
   highlightElements.clear()
 }
 
+/**
+ * Calculate DOM depth of an element (for z-index ordering)
+ * Deeper elements should have higher z-index so child highlights appear on top
+ */
+function getDOMDepth(element: HTMLElement): number {
+  let depth = 0
+  let current: HTMLElement | null = element
+  while (current && current !== document.body) {
+    depth++
+    current = current.parentElement
+  }
+  return depth
+}
+
 function createHighlightElement(instance: ComponentInstance): HTMLDivElement {
   const el = document.createElement('div')
   el.dataset['highlightId'] = instance.id
@@ -174,6 +188,11 @@ function updateHighlightElement(
 
   const rect = instance.rect
   const colorConfig = COLORS[type]
+
+  // Set z-index based on DOM depth - deeper elements (children) get higher z-index
+  // This ensures clicking on a child highlight captures the child, not the parent
+  const depth = instance.element?.isConnected ? getDOMDepth(instance.element) : 0
+  el.style.zIndex = String(depth)
 
   el.style.left = `${rect.left}px`
   el.style.top = `${rect.top}px`

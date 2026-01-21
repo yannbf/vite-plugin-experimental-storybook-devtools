@@ -1,41 +1,17 @@
-export interface ComponentMeta {
-  componentName: string
-  filePath: string
-  relativeFilePath: string
-  sourceId: string
-  isDefaultExport: boolean
-  line?: number
-  column?: number
-}
+/**
+ * React Runtime
+ *
+ * Contains the runtime code for the React HOC and prop serialization.
+ * This is injected as a virtual module during development.
+ */
 
-export interface ComponentInstance {
-  id: string
-  meta: ComponentMeta
-  props: Record<string, unknown>
-  /** Serialized props with JSX converted to source strings */
-  serializedProps?: SerializedProps
-  rect?: DOMRect
-  element: HTMLElement
-}
+import type { HighlighterOptions, VirtualModuleSetup } from '../types'
 
-export interface JSXSerializedValue {
-  __isJSX: true
-  source: string
-  componentRefs: string[]
-}
-
-export interface SerializedProps {
-  [key: string]: JSXSerializedValue | unknown
-}
-
-export interface HighlighterOptions {
-  eventName: string
-  enableOverlay: boolean
-  devtoolsDockId: string
-  debugMode?: boolean
-}
-
-export function setupVirtualModule(options: HighlighterOptions): string {
+/**
+ * Setup the React virtual module runtime
+ * Returns the runtime code as a string to be served as a virtual module
+ */
+export const setupVirtualModule: VirtualModuleSetup = (options: HighlighterOptions): string => {
   return `
 import React, { createElement, useEffect, useRef, useState } from 'react'
 import reactElementToJSXString from 'react-element-to-jsx-string/dist/esm/index.js'
@@ -52,7 +28,7 @@ const logError = (...args) => {
   console.error('[component-highlighter]', ...args)
 }
 
-logDebug('runtime loaded', { debug: DEBUG_MODE })
+logDebug('React runtime loaded', { debug: DEBUG_MODE })
 
 // Component registry for tracking live instances
 const componentRegistry = new Map()
@@ -429,3 +405,4 @@ export function withComponentHighlighter(Component, meta) {
 }
 `
 }
+

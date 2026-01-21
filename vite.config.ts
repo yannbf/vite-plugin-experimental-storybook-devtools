@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
 import { defineConfig } from 'vite'
 import { DevTools } from '@vitejs/devtools'
-import componentHighlighterPlugin from './src/component-highlighter-plugin'
+import componentHighlighter from './src/react'
 
 const r = (filepath: string) =>
   fileURLToPath(new URL(filepath, import.meta.url))
@@ -14,7 +14,7 @@ export default defineConfig({
   plugins: [
     react(),
     DevTools(),
-    componentHighlighterPlugin({
+    componentHighlighter({
       debugMode: true,
     }),
   ].filter(Boolean),
@@ -25,13 +25,12 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'vite-plugin-vue-tracer/client/record': r('../src/client/record.ts'),
-      'vite-plugin-vue-tracer/client/listeners': r(
-        '../src/client/listeners.ts'
+      'vite-plugin-component-highlighter/client/listeners': r(
+        './src/client/listeners.ts'
       ),
-      'vite-plugin-vue-tracer/client/overlay': r('../src/client/overlay.ts'),
-      'vite-plugin-vue-tracer/client/vite-devtools': r(
-        '../src/client/vite-devtools.ts'
+      'vite-plugin-component-highlighter/client/overlay': r('./src/client/overlay.ts'),
+      'vite-plugin-component-highlighter/client/vite-devtools': r(
+        './src/client/vite-devtools.ts'
       ),
     },
   },

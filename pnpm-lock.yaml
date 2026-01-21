@@ -11,15 +11,6 @@ importers:
       '@babel/generator':
         specifier: ^7.28.6
         version: 7.28.6
-      '@babel/parser':
-        specifier: ^7.28.6
-        version: 7.28.6
-      '@babel/traverse':
-        specifier: ^7.28.6
-        version: 7.28.6
-      '@babel/types':
-        specifier: ^7.28.6
-        version: 7.28.6
       nanoevents:
         specifier: ^9.0.0
         version: 9.1.0
@@ -33,6 +24,15 @@ importers:
         specifier: ^15.0.0
         version: 15.0.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
     devDependencies:
+      '@babel/parser':
+        specifier: ^7.28.6
+        version: 7.28.6
+      '@babel/traverse':
+        specifier: ^7.28.6
+        version: 7.28.6
+      '@babel/types':
+        specifier: ^7.28.6
+        version: 7.28.6
       '@playwright/test':
         specifier: ^1.57.0
         version: 1.57.0

@@ -1,4 +1,4 @@
-import type { ComponentMeta } from './virtual-module'
+import type { ComponentMeta } from './frameworks/types'
 import * as path from 'path'
 
 export interface SerializedProps {

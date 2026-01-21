@@ -1,13 +1,24 @@
+/**
+ * React Transform
+ *
+ * Babel-based AST transformation that instruments React components
+ * with the withComponentHighlighter HOC.
+ */
+
 // @ts-nocheck
 import { parse } from '@babel/parser'
 import traverseModule from '@babel/traverse'
 import generatorModule from '@babel/generator'
 import * as t from '@babel/types'
 import * as path from 'path'
+import type { TransformFunction } from '../types'
 
 const traverse = (traverseModule as any).default ?? traverseModule
 const generate = (generatorModule as any).default ?? generatorModule
-// Simple hash function for browser compatibility
+
+/**
+ * Simple hash function for generating source IDs
+ */
 function createHash(data: string): string {
   let hash = 0
   for (let i = 0; i < data.length; i++) {
@@ -18,7 +29,15 @@ function createHash(data: string): string {
   return Math.abs(hash).toString(36)
 }
 
-export function transform(code: string, id: string): string | undefined {
+/**
+ * Virtual module ID for React runtime
+ */
+export const VIRTUAL_MODULE_ID = 'virtual:component-highlighter/runtime'
+
+/**
+ * Transform React JSX/TSX files to wrap components with the highlighter HOC
+ */
+export const transform: TransformFunction = (code: string, id: string): string | undefined => {
   try {
     // Parse the file as TypeScript/JSX
     const ast = parse(code, {
@@ -171,7 +190,7 @@ export function transform(code: string, id: string): string | undefined {
           t.identifier('withComponentHighlighter')
         ),
       ],
-      t.stringLiteral('virtual:component-highlighter/runtime')
+      t.stringLiteral(VIRTUAL_MODULE_ID)
     )
     ast.program.body.unshift(highlighterImport)
 
@@ -201,13 +220,16 @@ export function transform(code: string, id: string): string | undefined {
     return output.code
   } catch (error) {
     console.warn(
-      `[vite-plugin-component-highlighter] Failed to transform ${id}:`,
+      `[component-highlighter] Failed to transform ${id}:`,
       error
     )
     return undefined
   }
 }
 
+/**
+ * Check if a function declaration is a React component (PascalCase name)
+ */
 function isComponentFunction(node: t.FunctionDeclaration): boolean {
   return !!(
     node.id &&
@@ -216,6 +238,9 @@ function isComponentFunction(node: t.FunctionDeclaration): boolean {
   )
 }
 
+/**
+ * Check if a variable declarator is a React component
+ */
 function isComponentVariable(node: t.VariableDeclarator): boolean {
   if (!node.id || node.id.type !== 'Identifier') return false
 
@@ -233,6 +258,9 @@ function isComponentVariable(node: t.VariableDeclarator): boolean {
   )
 }
 
+/**
+ * Check if a declaration is a React component
+ */
 function isComponentDeclaration(
   node: t.Expression | t.Pattern | t.Statement
 ): boolean {
@@ -250,6 +278,9 @@ function isComponentDeclaration(
   return false
 }
 
+/**
+ * Check if expression is a React.memo() call
+ */
 function isMemoWrapper(node: t.Expression | null): boolean {
   return !!(
     node &&
@@ -259,6 +290,9 @@ function isMemoWrapper(node: t.Expression | null): boolean {
   )
 }
 
+/**
+ * Check if expression is a React.forwardRef() call
+ */
 function isForwardRefWrapper(node: t.Expression | null): boolean {
   return !!(
     node &&
@@ -268,10 +302,16 @@ function isForwardRefWrapper(node: t.Expression | null): boolean {
   )
 }
 
+/**
+ * Get the variable name from a declarator
+ */
 function getVariableName(node: t.VariableDeclarator): string {
   return node.id.type === 'Identifier' ? node.id.name : 'AnonymousVariable'
 }
 
+/**
+ * Get the name from various declaration types
+ */
 function getDeclarationName(
   node: t.Expression | t.Pattern | t.Statement
 ): string | null {
@@ -287,6 +327,9 @@ function getDeclarationName(
   return null
 }
 
+/**
+ * Wrap a component with withComponentHighlighter HOC
+ */
 function wrapComponent(
   ast: t.File,
   node:
@@ -309,7 +352,10 @@ function wrapComponent(
       t.stringLiteral(componentName)
     ),
     t.objectProperty(t.identifier('filePath'), t.stringLiteral(filePath)),
-    t.objectProperty(t.identifier('relativeFilePath'), t.stringLiteral(relativeFilePath)),
+    t.objectProperty(
+      t.identifier('relativeFilePath'),
+      t.stringLiteral(relativeFilePath)
+    ),
     t.objectProperty(t.identifier('sourceId'), t.stringLiteral(sourceId)),
     t.objectProperty(
       t.identifier('isDefaultExport'),
@@ -419,3 +465,20 @@ function wrapComponent(
     }
   }
 }
+
+/**
+ * Detect if a file is a React file
+ */
+export function detectReact(code: string, id: string): boolean {
+  // Check file extension
+  if (!id.match(/\.(tsx|jsx)$/)) {
+    return false
+  }
+
+  // Check for React imports or JSX
+  const hasReactImport = /import\s+(?:React|\{[^}]*\})\s+from\s+['"]react['"]/.test(code)
+  const hasJSX = /<[A-Z][a-zA-Z]*|<[a-z]+[^>]*>/.test(code)
+
+  return hasReactImport || hasJSX
+}
+

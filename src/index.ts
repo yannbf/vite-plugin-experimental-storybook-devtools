@@ -1,5 +1,16 @@
-export { default as componentHighlighterPlugin } from './component-highlighter-plugin'
-export type { ComponentHighlighterOptions } from './component-highlighter-plugin'
+/**
+ * vite-plugin-component-highlighter
+ *
+ * Import from a framework-specific path:
+ * ```ts
+ * import componentHighlighter from 'vite-plugin-component-highlighter/react'
+ * ```
+ */
+
+// Core plugin factory (for advanced use cases)
+export { createComponentHighlighterPlugin, type ComponentHighlighterOptions } from './component-highlighter-plugin'
+
+// Story generator
 export { generateStory, generateStoryName } from './story-generator'
 export type {
   SerializedProps,
@@ -7,3 +18,18 @@ export type {
   StoryGenerationData,
   GeneratedStory,
 } from './story-generator'
+
+// Framework types
+export type {
+  ComponentMeta,
+  ComponentInstance,
+  HighlighterOptions,
+  TransformFunction,
+  VirtualModuleSetup,
+  FrameworkDetector,
+  FrameworkConfig,
+  ProviderDependency,
+} from './frameworks'
+
+// Provider analyzer
+export { analyzeAppProviders, analyzeComponentFile } from './provider-analyzer'

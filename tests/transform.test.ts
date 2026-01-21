@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { transform } from '../src/transform'
+import { transform } from '../src/frameworks/react/transform'
 
 describe('transform', () => {
   describe('basic transformations', () => {

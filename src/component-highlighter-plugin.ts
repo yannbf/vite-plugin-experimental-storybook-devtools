@@ -1,9 +1,7 @@
 /// <reference types="@vitejs/devtools-kit" />
 import type { Plugin, ViteDevServer } from 'vite'
 import { createFilter } from 'vite'
-import { transform } from './transform'
-import { setupVirtualModule } from './virtual-module'
-import type { SerializedProps } from './virtual-module'
+import type { FrameworkConfig, SerializedProps } from './frameworks'
 import { generateStory } from './story-generator'
 import { defineRpcFunction } from '@vitejs/devtools-kit'
 import * as fs from 'fs'
@@ -52,7 +50,7 @@ interface ComponentStoryData {
 export interface ComponentHighlighterOptions {
   /**
    * Glob patterns to include for component instrumentation
-   * @default ["**\/*.{tsx,jsx}"]
+   * @default ["**\/*.{tsx,jsx}"] for React, varies by framework
    */
   include?: string[]
   /**
@@ -97,11 +95,15 @@ export interface ComponentHighlighterOptions {
   storiesDir?: string
 }
 
-export default function componentHighlighterPlugin(
+/**
+ * Create the component highlighter plugin for a specific framework
+ */
+export function createComponentHighlighterPlugin(
+  framework: FrameworkConfig,
   options: ComponentHighlighterOptions = {}
 ): Plugin {
   const {
-    include = ['**/*.{tsx,jsx}'],
+    include = framework.extensions.map((ext) => `**/*${ext}`),
     exclude = ['**/node_modules/**', '**/dist/**', '**/*.d.ts'],
     eventName = 'component-highlighter:create-story',
     enableOverlay = true,
@@ -118,19 +120,9 @@ export default function componentHighlighterPlugin(
 
   return {
     name: 'vite-plugin-component-highlighter',
-    enforce: 'pre', // run before React plugin so JSX is still present
+    enforce: 'pre',
     configResolved(config) {
       isServe = config.command === 'serve'
-      // Detect React setup and warn if missing
-      const hasReact = config.plugins?.some(
-        (p) =>
-          p && typeof p === 'object' && 'name' in p && p.name.includes('react')
-      )
-      if (!hasReact) {
-        console.warn(
-          '[vite-plugin-component-highlighter] React plugin not detected. Make sure to add @vitejs/plugin-react to your Vite config.'
-        )
-      }
     },
     configureServer(srv) {
       server = srv
@@ -207,7 +199,6 @@ export default function componentHighlighterPlugin(
             type: 'action',
             setup: () => ({
               handler: (data: ComponentHighlightData | null) => {
-                // This will be called from the client when hovering over components
                 console.log('[DevTools] Highlight target:', data)
               },
             }),
@@ -220,7 +211,6 @@ export default function componentHighlighterPlugin(
             type: 'action',
             setup: () => ({
               handler: (data: { enabled: boolean }) => {
-                // This will be called from the client when toggling overlay
                 console.log('[DevTools] Toggle overlay:', data.enabled)
               },
             }),
@@ -233,7 +223,6 @@ export default function componentHighlighterPlugin(
             type: 'action',
             setup: () => ({
               handler: (data: ComponentStoryData) => {
-                // This will be called when creating a story from the component
                 console.log('[DevTools] Create story:', data.meta.componentName, 'name:', data.storyName)
 
                 // Generate and write the story file
@@ -321,7 +310,7 @@ export default function componentHighlighterPlugin(
                   }
                 }
 
-                // Dispatch custom event that can be listened to by external tools (like Storybook)
+                // Dispatch custom event that can be listened to by external tools
                 const event = new CustomEvent(eventName, {
                   detail: data,
                 })
@@ -335,14 +324,14 @@ export default function componentHighlighterPlugin(
       },
     },
     resolveId(id) {
-      if (id === 'virtual:component-highlighter/runtime') {
+      if (id === framework.virtualModuleId) {
         return '\0' + id
       }
       return null
     },
     load(id) {
-      if (id === '\0virtual:component-highlighter/runtime') {
-        return setupVirtualModule({
+      if (id === '\0' + framework.virtualModuleId) {
+        return framework.setupVirtualModule({
           eventName,
           enableOverlay,
           devtoolsDockId,
@@ -357,13 +346,19 @@ export default function componentHighlighterPlugin(
         return
       }
 
-      // Skip non-JSX/TSX files and excluded files
-      if (!filter(id) || !/\.(tsx|jsx)$/.test(id)) {
+      // Skip non-matching files
+      if (!filter(id)) {
         return
       }
-      console.log('transform', id)
 
-      return transform(code, id)
+      // Check if this framework handles this file
+      if (!framework.detect(code, id)) {
+        return
+      }
+
+      console.log(`[component-highlighter] Transforming ${id}`)
+
+      return framework.transform(code, id)
     },
   }
 }

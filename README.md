@@ -1,199 +1,348 @@
-# Vite React Component Highlighter Plugin
+# Vite Component Highlighter Plugin
 
-A Vite plugin that instruments React components to provide visual highlighting and Storybook story generation capabilities during development. Hover over components in your running app to see their details and create stories with a single click.
+A Vite plugin that instruments React components to provide visual highlighting and **automatic Storybook story generation** during development. Hover over components in your running app to see their details and create stories with a single click.
 
-## Features
+![Component Highlighter Demo](https://via.placeholder.com/800x400?text=Component+Highlighter+Demo)
 
-- 🔍 **Component Highlighting**: Hover over any React component to see a blue overlay and component details
-- 📚 **Story Generation**: Click "Create Story" to emit events containing component metadata for Storybook integration
-- 🎛️ **DevTools Integration**: Built-in Vite DevTools Kit integration with a dedicated dock panel
-- ⚡ **Performance Optimized**: Only active in development, tree-shaken in production
-- 🎯 **Configurable**: Fine-grained control over which components to instrument
-- ⌨️ **Keyboard Shortcuts**: Toggle overlay with `Shift+H`
+## ✨ Features
 
-## Installation
+- 🔍 **Component Highlighting** - Visual overlay on React components with configurable colors
+- 📚 **One-Click Story Generation** - Create Storybook stories directly from your running app
+- 🎯 **JSX Props Support** - Properly serializes JSX children and nested components
+- 🔄 **Append to Existing Stories** - Add new stories to existing story files
+- 📁 **Smart Imports** - Automatically resolves and adds component imports
+- 🎛️ **DevTools Integration** - Built-in Vite DevTools Kit dock panel
+- 📊 **Debug Overlay** - Component stats and story coverage when holding Alt
+- ⚡ **Performance Optimized** - Only active in development, tree-shaken in production
+- ⌨️ **Keyboard Shortcuts** - Quick toggles and navigation
+
+## 📦 Installation
 
 ```bash
 npm install vite-plugin-component-highlighter
+# or
+pnpm add vite-plugin-component-highlighter
+# or
+yarn add vite-plugin-component-highlighter
 ```
 
-## Usage
+### Peer Dependencies
 
-### Basic Setup
+This plugin requires:
+- `vite` >= 5.0.0
+- `react` >= 18.0.0
+- `@vitejs/devtools` >= 0.1.0
 
-Add the plugin to your `vite.config.ts`:
+## 🚀 Quick Start
+
+### 1. Add the plugin to your Vite config
 
 ```typescript
+// vite.config.ts
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { DevTools } from '@vitejs/devtools'
-import componentHighlighterPlugin from 'vite-plugin-component-highlighter'
+import componentHighlighter from 'vite-plugin-component-highlighter/react'
 
 export default defineConfig({
   plugins: [
     react(),
     DevTools(),
-    componentHighlighterPlugin()
+    componentHighlighter(),
   ],
 })
 ```
 
-### Configuration Options
+### 2. Start your development server
+
+```bash
+npm run dev
+```
+
+### 3. Open Vite DevTools
+
+Click the Vite DevTools floating button (usually bottom-right) and select the **Component Highlighter** tab.
+
+### 4. Start highlighting!
+
+Once the dock is active:
+- **Hover** over any component to see its tooltip
+- **Click** on a component to open the context menu
+- **Hold Alt** to see all components highlighted at once
+- **Create stories** with a single click!
+
+## 🎮 Usage
+
+### Highlight Modes
+
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| **Hover** | Mouse over | Shows tooltip for single component |
+| **Highlight All** | Hold `Alt` | Shows all components with debug overlay |
+| **Toggle Sticky** | `Shift + H` | Keeps highlight-all mode active |
+| **Dismiss** | `Escape` | Closes context menu or selection |
+
+### Highlight Colors
+
+- 🔵 **Blue** - Non-hovered components (when Alt is held)
+- 🩷 **Pink Solid** - Currently hovered component
+- 🩷 **Pink Dashed** - Other instances of the same component
+- 🩷 **Pink (20% bg)** - Selected component
+
+### Creating Stories
+
+1. **Click on a highlighted component** to open the context menu
+2. **Enter a story name** (auto-suggested based on props)
+3. **Click "Create Story"** (or "Add Story" if stories exist)
+4. The story file is created/updated automatically!
+
+### Context Menu Features
+
+- **Component name** with Storybook icon (if stories exist)
+- **Relative file path** for quick reference
+- **Props display** with current values
+- **Story name input** with smart suggestions
+- **Open Component** - Opens the component file in your editor
+- **Open Stories** - Opens the story file in your editor
+- **Create/Add Story** - Generates story with current props
+
+## ⚙️ Configuration
 
 ```typescript
-componentHighlighterPlugin({
-  // Glob patterns to include for instrumentation (default: ['**/*.{tsx,jsx}'])
-  include: ['**/*.{tsx,jsx}', '!**/node_modules/**'],
-
-  // Glob patterns to exclude from instrumentation
-  exclude: ['**/node_modules/**', '**/dist/**', '**/*.d.ts'],
-
-  // Custom event name for story creation events (default: 'component-highlighter:create-story')
-  eventName: 'my-custom-story-event',
-
-  // Enable/disable overlay in development (default: true)
+componentHighlighter({
+  // Glob patterns for files to instrument (default: framework's extensions)
+  include: ['**/*.{tsx,jsx}'],
+  
+  // Glob patterns to exclude
+  exclude: ['**/node_modules/**', '**/dist/**', '**/*.stories.{tsx,jsx}'],
+  
+  // Custom event name for story creation
+  eventName: 'component-highlighter:create-story',
+  
+  // Enable/disable overlay (default: true)
   enableOverlay: true,
-
-  // Custom devtools dock ID (default: 'component-highlighter')
-  devtoolsDockId: 'my-component-highlighter',
-
-  // Force instrumentation in production builds (default: false)
+  
+  // Custom DevTools dock ID
+  devtoolsDockId: 'component-highlighter',
+  
+  // Force instrumentation in production (default: false)
   force: false,
 })
 ```
 
-### Listening for Story Creation Events
+### Default Exclusions
 
-The plugin emits custom events when users click "Create Story". Listen for these events in your application:
+The following patterns are excluded by default:
+- `**/node_modules/**`
+- `**/dist/**`
+- `**/*.d.ts`
+- `**/*.stories.{tsx,jsx,ts,js}`
+- `**/*.test.{tsx,jsx,ts,js}`
+- `**/*.spec.{tsx,jsx,ts,js}`
+
+## 📖 Generated Story Format
+
+The plugin generates TypeScript stories compatible with Storybook 7+:
 
 ```typescript
-// Listen for story creation events
-window.addEventListener('component-highlighter:create-story', (event) => {
-  const { componentName, filePath, props, sourceId } = event.detail
+import React from 'react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { fn } from 'storybook/test';
+import MyButton from './MyButton';
+import Icon from './Icon';
 
-  console.log('Create story for:', {
-    componentName,
-    filePath,
-    props,
-    sourceId
-  })
+const meta = {
+  title: 'Components/MyButton',
+  component: MyButton,
+} satisfies Meta<typeof MyButton>;
 
-  // Your Storybook integration logic here
-  // e.g., open Storybook and create a new story file
-})
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Primary: Story = {
+  args: {
+    variant: 'primary',
+    label: 'Click me',
+    icon: <Icon name="star" />,
+    onClick: fn(),
+  },
+};
 ```
 
-## How It Works
+### Supported Prop Types
 
-### Build-time Instrumentation
+| Type | Example | Generated Code |
+|------|---------|----------------|
+| Primitives | `"hello"`, `42`, `true` | `"hello"`, `42`, `true` |
+| Objects | `{ nested: { value: 1 } }` | `{ nested: { value: 1 } }` |
+| Arrays | `[1, 2, 3]` | `[1, 2, 3]` |
+| JSX Elements | `<Icon />` | `<Icon />` (with import) |
+| JSX Children | `<>Hello <Button /></>` | `<>Hello <Button /></>` |
+| Functions | `onClick={handleClick}` | `fn()` (with import) |
 
-The plugin uses Babel to transform JSX/TSX files during development:
+## 🔍 Debug Overlay
 
-1. **Component Detection**: Identifies React components (function components, arrow functions, memo, forwardRef)
-2. **HOC Wrapping**: Wraps components with `withComponentHighlighter` HOC
-3. **Metadata Injection**: Adds component name, file path, and source ID
-4. **DOM Anchoring**: Creates boundary elements for hover detection
+When holding `Alt`, a debug overlay appears in the top-right corner showing:
 
-### Runtime Behavior
+- **Total instances** - Number of component instances on screen
+- **Unique components** - Number of distinct component types
+- **With stories** - Components that have story files
+- **Coverage %** - Percentage of components with stories
 
-1. **Registry**: Maintains a registry of live component instances with props and DOM references
-2. **Hover Detection**: Listens for `mousemove` events and detects components via data attributes
-3. **Overlay Rendering**: Shows a blue highlight overlay on hovered components
-4. **DevTools Communication**: Sends component data to the DevTools dock via RPC
-5. **Event Dispatch**: Emits custom events when "Create Story" is clicked
+## 🏗️ Architecture
 
-### DevTools Integration
-
-The plugin registers a dock panel in Vite DevTools showing:
-- Component name and file path
-- Current props with syntax highlighting
-- "Create Story" button
-- Overlay toggle control
-
-## Keyboard Shortcuts
-
-- `Shift + H`: Toggle component highlighting overlay on/off
-
-## Architecture
+For detailed technical documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Vite Plugin   │    │  Virtual Module  │    │  DevTools Dock  │
 │                 │    │                  │    │                 │
-│ • Transform JSX │    │ • Runtime Client │    │ • Component UI  │
-│ • Inject HOC    │    │ • Registry       │    │ • RPC Receiver  │
-│ • DevTools Reg  │    │ • Overlay        │    │ • Story Button  │
+│ • Transform JSX │───▶│ • Runtime HOC    │───▶│ • Component UI  │
+│ • Inject meta   │    │ • Registry       │    │ • RPC Handler   │
+│ • Story gen     │    │ • Serialization  │    │ • Story create  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌────────────────────┐
-                    │   RPC Communication│
-                    │                    │
-                    │ • highlight-target │
-                    │ • create-story     │
-                    │ • toggle-overlay   │
-                    └────────────────────┘
 ```
 
-## Development
+### How It Works
 
-### Building
+1. **Build-time**: Babel transforms wrap components with `withComponentHighlighter` HOC
+2. **Runtime**: HOC registers component instances with metadata and props
+3. **Interaction**: Overlay detects mouse events and renders highlights
+4. **Story Creation**: Serialized props are sent via RPC, story files are written to disk
+
+## 🧪 Development
+
+### Setup
 
 ```bash
-npm run build
+# Clone the repository
+git clone https://github.com/your-org/vite-plugin-component-highlighter.git
+cd vite-plugin-component-highlighter
+
+# Install dependencies
+pnpm install
 ```
 
-### Testing
+### Available Scripts
 
 ```bash
-npm run test
+# Run the playground app
+pnpm play
+
+# Run unit tests
+pnpm test
+
+# Run E2E tests (requires playground running)
+pnpm exec playwright test
+
+# Build the library
+pnpm build
+
+# Type check
+pnpm typecheck
 ```
 
-### Playground
+### Project Structure
 
-```bash
-npm run play
+```
+├── src/
+│   ├── index.ts                    # Package entry
+│   ├── component-highlighter-plugin.ts  # Main Vite plugin
+│   ├── transform.ts                # Babel AST transformation
+│   ├── virtual-module.ts           # Runtime HOC
+│   ├── story-generator.ts          # Story file generation
+│   ├── provider-analyzer.ts        # Provider detection
+│   └── client/
+│       ├── overlay.ts              # UI overlay
+│       ├── listeners.ts            # Event handlers
+│       └── vite-devtools.ts        # DevTools dock
+├── tests/                          # Unit tests
+├── e2e/                            # E2E tests
+└── playground/                     # Development app
 ```
 
-Navigate to the playground app and hover over the `MyButton` component to see the highlighter in action.
+## ⚠️ Limitations
 
-## Limitations
+- **React only** - Currently supports React function components (not class components)
+- **Development only** - Disabled in production builds by default
+- **Vite DevTools required** - Needs `@vitejs/devtools` for full functionality
+- **Provider dependencies** - Components requiring context providers may need Storybook decorators
 
-- Only works with React function components (not class components)
-- Requires React and Vite DevTools to be installed
-- Development-only feature (disabled in production by default)
+### Handling Provider Dependencies
 
-## Contributing
+If your components use context providers (Redux, Router, Theme, etc.), you'll need to set up decorators in your Storybook preview file. The plugin includes a provider analyzer that can help identify these dependencies.
 
-Contributions are welcome! Please feel free to submit issues and pull requests.
+See the [Provider Analysis](#provider-analysis) section for more details.
 
-## License
+## 🔮 Future Plans
 
-MIT
+- [ ] Vue support
+- [ ] Svelte support
+- [ ] Angular support
+- [ ] Automatic decorator generation
+- [ ] Component usage analytics
 
-## Development
+## 🤝 Contributing
 
-- Install dependencies:
+Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.md) before submitting a PR.
 
-```bash
-npm install
-```
+### Reporting Issues
 
-- Run the playground:
+When reporting issues, please include:
+- Node.js version
+- Vite version
+- React version
+- Browser and version
+- Minimal reproduction
 
-```bash
-npm run play
-```
+## 📄 License
 
-- Run the unit tests:
+MIT © Yann Braga
 
-```bash
-npm run test
-```
+---
 
-- Build the library:
+## Appendix
 
-```bash
-npm run build
-```
+### Provider Analysis
+
+The plugin includes a provider analyzer (`src/provider-analyzer.ts`) that can detect common provider dependencies:
+
+**Supported Providers**:
+- Redux (`react-redux`, `@reduxjs/toolkit`)
+- React Router (`react-router-dom`)
+- Emotion (`@emotion/react`)
+- Styled Components (`styled-components`)
+- TanStack Query (`@tanstack/react-query`)
+- React Intl (`react-intl`)
+- i18next (`react-i18next`)
+- Chakra UI (`@chakra-ui/react`)
+- Mantine (`@mantine/core`)
+- Next.js (`next/router`, `next/navigation`)
+
+The analyzer scans your app entry point and logs detected providers with decorator suggestions.
+
+### Keyboard Shortcuts Reference
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt` (hold) | Show all component highlights + debug overlay |
+| `Shift + H` | Toggle sticky highlight-all mode |
+| `Escape` | Dismiss context menu / clear selection |
+
+### Troubleshooting
+
+#### Stories aren't being created
+
+1. Ensure the DevTools dock is open and the Component Highlighter tab is active
+2. Check the browser console for errors
+3. Verify the output path is writable
+
+#### Components not being highlighted
+
+1. Ensure the file matches the `include` patterns
+2. Check that it's not matching an `exclude` pattern
+3. Verify the component is a function component (not a class)
+
+#### JSX props showing as `[Object]`
+
+This typically means the component rendered before the plugin fully loaded. Try refreshing the page.
