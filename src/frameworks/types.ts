@@ -125,26 +125,6 @@ export interface FrameworkConfig {
 }
 
 /**
- * Story generation options (framework-agnostic)
- */
-export interface StoryGenerationOptions {
-  meta: ComponentMeta
-  props: SerializedProps
-  componentRegistry: Record<string, string>
-  storyName?: string
-  existingContent?: string
-}
-
-/**
- * Result of story generation
- */
-export interface GeneratedStory {
-  content: string
-  storyName: string
-  isAppend: boolean
-}
-
-/**
  * Provider dependency detection result
  */
 export interface ProviderDependency {

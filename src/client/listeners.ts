@@ -1,4 +1,4 @@
-import type { ComponentInstance } from '../virtual-module'
+import type { ComponentInstance } from '../frameworks/types'
 import {
   enableOverlay,
   disableOverlay,
@@ -107,36 +107,6 @@ function debounce(func: Function, wait: number) {
   }
 }
 
-// Registry management functions - these are now handled by the virtual module
-// These functions are kept for compatibility but delegate to the virtual module
-export function registerInstance(
-  _meta: any,
-  _props: Record<string, unknown>,
-  _element: HTMLElement
-): string {
-  // This should be called from the virtual module, not directly
-  console.warn(
-    '[component-highlighter] registerInstance called from listeners - should be called from virtual module'
-  )
-  return ''
-}
-
-export function unregisterInstance(_id: string): void {
-  // This should be called from the virtual module, not directly
-  console.warn(
-    '[component-highlighter] unregisterInstance called from listeners - should be called from virtual module'
-  )
-}
-
-export function updateInstanceProps(
-  _id: string,
-  _props: Record<string, unknown>
-): void {
-  // This should be called from the virtual module, not directly
-  console.warn(
-    '[component-highlighter] updateInstanceProps called from listeners - should be called from virtual module'
-  )
-}
 
 // Find component at pointer position
 // When Option is held, we don't need to find component at point for hovering
@@ -186,31 +156,16 @@ const handleMouseMove = debounce((event: MouseEvent) => {
   // Update instance rects for all components (for overlay positioning)
   updateInstanceRects()
 
-  // When Option is held, all components are highlighted
-  // When Option is not held, only show highlight on hover
-  if (!isOptionHeld) {
-    const instance = findComponentAtPoint(event.clientX, event.clientY)
-    updateHover(instance?.id || null)
+  // Find component under cursor for hover highlight
+  const instance = findComponentAtPoint(event.clientX, event.clientY)
+  updateHover(instance?.id || null)
 
-    if (instance) {
-      // Update rect for this instance
-      instance.rect = instance.element.getBoundingClientRect()
-      // Show hover menu (tooltip)
-      showHoverMenu(instance, event.clientX, event.clientY)
-    } else {
-      // Hide hover menu when not hovering over a component
-      hideHoverMenu()
-    }
+  if (instance) {
+    // Update rect for this instance (needed for proper highlight positioning)
+    instance.rect = instance.element.getBoundingClientRect()
+    showHoverMenu(instance, event.clientX, event.clientY)
   } else {
-    // When Option is held, find component under cursor for hover highlight
-    const instance = findComponentAtPoint(event.clientX, event.clientY)
-    updateHover(instance?.id || null)
-
-    if (instance) {
-      showHoverMenu(instance, event.clientX, event.clientY)
-    } else {
-      hideHoverMenu()
-    }
+    hideHoverMenu()
   }
 }, 16) // ~60fps
 

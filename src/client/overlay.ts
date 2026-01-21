@@ -173,7 +173,6 @@ function createHighlightElement(instance: ComponentInstance): HTMLDivElement {
     box-sizing: border-box;
     pointer-events: auto;
     cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s;
   `
   return el
 }
@@ -234,7 +233,10 @@ function updateHighlightElement(
   }
 }
 
-async function drawAllHighlights() {
+// Track pending story file fetches to avoid duplicate requests
+const pendingStoryChecks = new Set<string>()
+
+function drawAllHighlights() {
   if (!highlightContainer) return
 
   const instances = Array.from(componentRegistry.values())
@@ -256,15 +258,23 @@ async function drawAllHighlights() {
   // Track which elements we've used
   const usedIds = new Set<string>()
 
-  // Check story files in parallel
-  const storyChecks = instances.map(async (instance) => {
-    const storyInfo = await checkStoryFile(instance.meta.filePath)
-    return { instance, storyInfo }
-  })
+  // Prefetch story info for components not yet cached (async, non-blocking)
+  for (const instance of instances) {
+    const filePath = instance.meta.filePath
+    if (!storyFileCache.has(filePath) && !pendingStoryChecks.has(filePath)) {
+      pendingStoryChecks.add(filePath)
+      // Fire off the check but don't wait - it will update the cache
+      checkStoryFile(filePath).then(() => {
+        pendingStoryChecks.delete(filePath)
+        // Trigger a re-render once we have the info (only if still showing highlights)
+        if (highlightContainer) {
+          drawAllHighlights()
+        }
+      })
+    }
+  }
 
-  const instancesWithStories = await Promise.all(storyChecks)
-
-  for (const { instance, storyInfo } of instancesWithStories) {
+  for (const instance of instances) {
     if (!instance.rect) continue
 
     let shouldShow = false
@@ -312,7 +322,11 @@ async function drawAllHighlights() {
         highlightContainer!.appendChild(el)
       }
 
-      updateHighlightElement(el, instance, type, storyInfo.hasStory)
+      // Use cached story info (synchronous) - defaults to false if not cached yet
+      const storyInfo = storyFileCache.get(instance.meta.filePath)
+      const hasStory = storyInfo?.hasStory ?? false
+
+      updateHighlightElement(el, instance, type, hasStory)
     }
   }
 
@@ -566,7 +580,6 @@ function hideContextMenu() {
 
 // Hover menu management
 let hoverMenuElement: HTMLDivElement | null = null
-let hoverMenuTimeout: number | null = null
 
 export function showHoverMenu(
   instance: ComponentInstance,
@@ -613,10 +626,6 @@ export function hideHoverMenu() {
   if (hoverMenuElement) {
     hoverMenuElement.remove()
     hoverMenuElement = null
-  }
-  if (hoverMenuTimeout) {
-    clearTimeout(hoverMenuTimeout)
-    hoverMenuTimeout = null
   }
 }
 

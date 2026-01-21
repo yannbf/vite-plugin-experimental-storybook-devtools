@@ -16,7 +16,5 @@ export type {
   VirtualModuleSetup,
   FrameworkDetector,
   FrameworkConfig,
-  StoryGenerationOptions,
-  GeneratedStory,
   ProviderDependency,
 } from './types'

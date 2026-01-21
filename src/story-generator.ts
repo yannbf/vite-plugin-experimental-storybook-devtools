@@ -1,22 +1,15 @@
-import type { ComponentMeta } from './frameworks/types'
+import type {
+  ComponentMeta,
+  SerializedProps,
+  JSXSerializedValue,
+  FunctionSerializedValue,
+} from './frameworks/types'
 import * as path from 'path'
 
-export interface SerializedProps {
-  [key: string]: SerializedValue
-}
+// Re-export types for consumers
+export type { SerializedProps, JSXSerializedValue, FunctionSerializedValue }
 
-export interface JSXSerializedValue {
-  __isJSX: true
-  source: string
-  componentRefs: string[]
-}
-
-export interface FunctionSerializedValue {
-  __isFunction: true
-  name: string
-}
-
-export type SerializedValue = JSXSerializedValue | FunctionSerializedValue | unknown
+type SerializedValue = JSXSerializedValue | FunctionSerializedValue | unknown
 
 export interface StoryGenerationData {
   meta: ComponentMeta

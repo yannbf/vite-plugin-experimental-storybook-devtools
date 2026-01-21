@@ -309,14 +309,6 @@ export function createComponentHighlighterPlugin(
                     console.error('[DevTools] Failed to create story:', error)
                   }
                 }
-
-                // Dispatch custom event that can be listened to by external tools
-                const event = new CustomEvent(eventName, {
-                  detail: data,
-                })
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(event)
-                }
               },
             }),
           })
