@@ -18,6 +18,10 @@ export interface StoryGenerationData {
   props: SerializedProps
   /** Map of component name to file path for import resolution */
   componentRegistry?: Map<string, string>
+  /** Custom story name (defaults to auto-generated name) */
+  storyName?: string
+  /** Existing file content to append to */
+  existingContent?: string
 }
 
 export interface GeneratedStory {
@@ -27,13 +31,15 @@ export interface GeneratedStory {
   filePath: string
   /** List of imports that need to be added */
   imports: Array<{ name: string; path: string }>
+  /** The story name that was used */
+  storyName: string
 }
 
 /**
  * Generates a Storybook story file from captured component data
  */
 export function generateStory(data: StoryGenerationData): GeneratedStory {
-  const { meta, props, componentRegistry } = data
+  const { meta, props, componentRegistry, storyName: customStoryName, existingContent } = data
   const { componentName, filePath, isDefaultExport } = meta
 
   // Calculate relative paths and story file location
@@ -43,6 +49,11 @@ export function generateStory(data: StoryGenerationData): GeneratedStory {
     componentDir,
     `${componentFileName}.stories.tsx`
   )
+
+  // Determine story name
+  let storyName = customStoryName || generateStoryName(props)
+  // Convert to valid identifier (PascalCase, no spaces/special chars)
+  storyName = toValidStoryName(storyName)
 
   // Collect all component references from JSX props for imports
   const componentRefs = new Set<string>()
@@ -74,18 +85,129 @@ export function generateStory(data: StoryGenerationData): GeneratedStory {
   }
 
   // Generate the story content
-  const content = generateStoryContent({
-    componentName,
-    imports,
-    props,
-    isDefaultExport,
-  })
+  let content: string
+
+  if (existingContent) {
+    // Append to existing file
+    content = appendStoryToExisting({
+      existingContent,
+      storyName,
+      props,
+      imports,
+      componentName,
+    })
+  } else {
+    // Generate new file
+    content = generateStoryContent({
+      componentName,
+      imports,
+      props,
+      isDefaultExport,
+      storyName,
+    })
+  }
 
   return {
     content,
     filePath: storyFilePath,
     imports,
+    storyName,
   }
+}
+
+/**
+ * Convert a string to a valid JavaScript identifier in PascalCase
+ */
+function toValidStoryName(name: string): string {
+  // Remove invalid characters and convert to PascalCase
+  return name
+    .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special chars
+    .split(/\s+/) // Split by whitespace
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('')
+    || 'Default'
+}
+
+/**
+ * Append a new story to an existing story file
+ */
+function appendStoryToExisting(options: {
+  existingContent: string
+  storyName: string
+  props: SerializedProps
+  imports: Array<{ name: string; path: string }>
+  componentName: string
+}): string {
+  const { existingContent, storyName, props, imports } = options
+
+  // Check if story with same name already exists
+  let finalStoryName = storyName
+  const storyExportRegex = /export\s+const\s+(\w+)\s*[=:]/g
+  const existingStories = new Set<string>()
+  let match
+  while ((match = storyExportRegex.exec(existingContent ?? '')) !== null) {
+    if (match[1]) {
+      existingStories.add(match[1])
+    }
+  }
+
+  // If story name exists, add a number suffix
+  if (existingStories.has(finalStoryName)) {
+    let counter = 2
+    while (existingStories.has(`${storyName}${counter}`)) {
+      counter++
+    }
+    finalStoryName = `${storyName}${counter}`
+  }
+
+  // Add any missing imports
+  let updatedContent = existingContent
+
+  for (const imp of imports) {
+    // Skip if import already exists (simple check)
+    const importName = imp.name.replace(/[{}]/g, '').trim()
+    if (!existingContent.includes(importName) || !existingContent.includes(imp.path)) {
+      // Check if there's an existing import from the same path we can extend
+      const samePathRegex = new RegExp(`import\\s*\\{([^}]+)\\}\\s*from\\s*['"]${escapeRegex(imp.path)}['"]`)
+      const samePathMatch = updatedContent.match(samePathRegex)
+
+      if (samePathMatch && samePathMatch[1] && imp.name.startsWith('{')) {
+        // Extend existing import
+        const existingNames = samePathMatch[1]
+        if (!existingNames.includes(importName)) {
+          const newNames = `${existingNames.trim()}, ${importName}`
+          updatedContent = updatedContent.replace(samePathMatch[0], `import { ${newNames} } from '${imp.path}'`)
+        }
+      } else if (!samePathMatch && !existingContent.includes(`from '${imp.path}'`)) {
+        // Add new import at the end of existing imports
+        const lastImportMatch = updatedContent.match(/^(import\s+.+from\s+['"][^'"]+['"];?\s*\n)+/m)
+        if (lastImportMatch) {
+          const insertPos = lastImportMatch.index! + lastImportMatch[0].length
+          const newImport = `import ${imp.name} from '${imp.path}';\n`
+          updatedContent = updatedContent.slice(0, insertPos) + newImport + updatedContent.slice(insertPos)
+        }
+      }
+    }
+  }
+
+  // Generate the new story export
+  const argsContent = generateArgsContent(props, 1)
+  const newStory = `
+export const ${finalStoryName}: Story = {
+  args: ${argsContent},
+};
+`
+
+  // Append the new story at the end
+  return updatedContent.trimEnd() + '\n' + newStory
+
+}
+
+/**
+ * Escape special regex characters
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /**
@@ -144,12 +266,14 @@ function generateStoryContent(options: {
   imports: Array<{ name: string; path: string }>
   props: SerializedProps
   isDefaultExport: boolean
+  storyName: string
 }): string {
-  const { componentName, imports, props } = options
+  const { componentName, imports, props, storyName } = options
 
   // Build import statements
   const importStatements = [
-    `import type { Meta, StoryObj } from '@storybook/react';`,
+    `import React from 'react';`,
+    `import type { Meta, StoryObj } from '@storybook/react-vite';`,
     ...imports.map((imp) => `import ${imp.name} from '${imp.path}';`),
   ].join('\n')
 
@@ -166,7 +290,7 @@ const meta: Meta<typeof ${componentName}> = {
 export default meta;
 type Story = StoryObj<typeof ${componentName}>;
 
-export const Snapshot: Story = {
+export const ${storyName}: Story = {
   args: ${argsContent},
 };
 `

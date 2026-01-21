@@ -37,13 +37,18 @@ export interface HighlighterOptions {
 export function setupVirtualModule(options: HighlighterOptions): string {
   return `
 import React, { createElement, useEffect, useRef, useState } from 'react'
-import reactElementToJSXString from 'react-element-to-jsx-string'
+import reactElementToJSXString from 'react-element-to-jsx-string/dist/esm/index.js'
 
 const DEBUG_MODE = ${options.debugMode ? 'true' : 'false'}
 const logDebug = (...args) => {
   if (DEBUG_MODE) {
     console.log('[component-highlighter]', ...args)
   }
+}
+
+// Always log errors
+const logError = (...args) => {
+  console.error('[component-highlighter]', ...args)
 }
 
 logDebug('runtime loaded', { debug: DEBUG_MODE })
@@ -58,18 +63,40 @@ function generateInstanceId(sourceId) {
 
 /**
  * Get the display name of a React element's type
+ * Checks for __originalName first (set by withComponentHighlighter)
  */
 function getComponentName(type) {
   if (typeof type === 'string') return type // DOM element
-  if (typeof type === 'function') {
-    return type.displayName || type.name || 'Unknown'
+  
+  // Check for our custom __originalName property first (most reliable)
+  if (type?.__originalName) {
+    return type.__originalName
   }
+  
+  if (typeof type === 'function') {
+    // Try to unwrap HOC patterns from displayName
+    const displayName = type.displayName
+    if (displayName) {
+      const match = displayName.match(/^(?:with\\w+|memo|forwardRef)\\((.+)\\)$/)
+      if (match) return match[1]
+      return displayName
+    }
+    return type.name || 'Unknown'
+  }
+  
   if (type && typeof type === 'object') {
     // Handle React.memo, React.forwardRef, etc.
-    if (type.displayName) return type.displayName
-    if (type.render && type.render.displayName) return type.render.displayName
+    if (type.__originalName) return type.__originalName
+    if (type.displayName) {
+      const match = type.displayName.match(/^(?:with\\w+|memo|forwardRef)\\((.+)\\)$/)
+      if (match) return match[1]
+      return type.displayName
+    }
+    if (type.render?.__originalName) return type.render.__originalName
+    if (type.render?.displayName) return type.render.displayName
     if (type.type) return getComponentName(type.type)
   }
+  
   return 'Unknown'
 }
 
@@ -127,21 +154,31 @@ function serializeValue(value) {
   // Handle React elements (JSX)
   if (React.isValidElement(value)) {
     try {
+      const elementName = getComponentName(value.type)
+      logDebug('Serializing single JSX element:', elementName)
       const source = reactElementToJSXString(value, {
         showDefaultProps: false,
         showFunctions: true,
         sortProps: true,
         useBooleanShorthandSyntax: true,
         useFragmentShortSyntax: true,
+        // Use __originalName if available, otherwise fall back to getComponentName
+        displayName: (el) => {
+          const t = el.type
+          if (typeof t === 'string') return t
+          if (t?.__originalName) return t.__originalName
+          return getComponentName(t)
+        },
       })
       const componentRefs = Array.from(extractComponentRefs(value))
+      logDebug('Serialized JSX element successfully:', source.substring(0, 100))
       return {
         __isJSX: true,
         source,
         componentRefs,
       }
     } catch (err) {
-      logDebug('Failed to serialize JSX element:', err)
+      logError('Failed to serialize JSX element:', err?.message || err, value)
       return { __isJSX: true, source: '{/* Failed to serialize */}', componentRefs: [] }
     }
   }
@@ -151,6 +188,7 @@ function serializeValue(value) {
     const hasJSX = value.some(item => React.isValidElement(item))
     if (hasJSX) {
       try {
+        logDebug('Serializing JSX array with', value.length, 'items')
         // Wrap in fragment for serialization
         const fragment = React.createElement(React.Fragment, null, ...value)
         const source = reactElementToJSXString(fragment, {
@@ -159,6 +197,13 @@ function serializeValue(value) {
           sortProps: true,
           useBooleanShorthandSyntax: true,
           useFragmentShortSyntax: true,
+          // Use __originalName if available, otherwise fall back to getComponentName
+          displayName: (el) => {
+            const t = el.type
+            if (typeof t === 'string') return t
+            if (t?.__originalName) return t.__originalName
+            return getComponentName(t)
+          },
         })
         
         // Collect all component refs from the array
@@ -169,13 +214,22 @@ function serializeValue(value) {
           }
         })
         
+        logDebug('Serialized JSX array successfully:', source.substring(0, 100))
         return {
           __isJSX: true,
           source,
           componentRefs: Array.from(componentRefs),
         }
       } catch (err) {
-        logDebug('Failed to serialize JSX array:', err)
+        logError('Failed to serialize JSX array:', err?.message || err)
+        // Log what we're trying to serialize for debugging
+        value.forEach((item, i) => {
+          if (React.isValidElement(item)) {
+            logError('  Array item', i, ':', item.type?.name || item.type || typeof item)
+          } else {
+            logError('  Array item', i, ':', typeof item, item)
+          }
+        })
         return { __isJSX: true, source: '{/* Failed to serialize */}', componentRefs: [] }
       }
     }
@@ -352,6 +406,12 @@ export const ComponentHighlighterBoundary = ({ meta, props, children }) => {
 
 // Higher-order component that wraps components with boundary
 export function withComponentHighlighter(Component, meta) {
+  // Get the original component name
+  // Priority: meta.componentName (from Babel transform, always correct)
+  //           > Component.displayName (if explicitly set)
+  //           > Component.name (might be mangled like '_c' by bundlers)
+  const originalName = meta.componentName || Component.displayName || Component.name || 'Component'
+  
   const WrappedComponent = (props) => {
     return React.createElement(
       ComponentHighlighterBoundary,
@@ -360,7 +420,9 @@ export function withComponentHighlighter(Component, meta) {
     )
   }
 
-  WrappedComponent.displayName = \`withComponentHighlighter(\${Component.displayName || Component.name || 'Component'})\`
+  // Store the original name for serialization
+  WrappedComponent.__originalName = originalName
+  WrappedComponent.displayName = \`withComponentHighlighter(\${originalName})\`
 
   return WrappedComponent
 }

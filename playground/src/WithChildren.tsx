@@ -1,14 +1,13 @@
 import React from 'react'
-import { YetAnother } from './YetAnother'
+import { Emoji } from './Emoji'
 
-export const Other = ({ label, mode, deepObject, children }) => {
-  console.log('Other rendered')
+export const WithChildren = ({ label, mode, deepObject, children }: { label: string, mode: string, deepObject: any, children?: React.ReactNode }) => {
   return (
     <div className="other">
       <h1>{label}</h1>
       <p>mode: {mode}</p>
       <p>deepObject: {JSON.stringify(deepObject)}</p>
-      <YetAnother type="opaque" />
+      <Emoji />
       {children}
     </div>
   )

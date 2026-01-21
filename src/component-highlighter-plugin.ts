@@ -43,6 +43,8 @@ interface ComponentStoryData {
   serializedProps?: SerializedProps
   /** Component registry for import resolution: componentName -> filePath */
   componentRegistry?: Record<string, string>
+  /** Custom story name */
+  storyName?: string
 }
 
 export interface ComponentHighlighterOptions {
@@ -180,7 +182,7 @@ export default function componentHighlighterPlugin(
             setup: () => ({
               handler: (data: ComponentStoryData) => {
                 // This will be called when creating a story from the component
-                console.log('[DevTools] Create story:', data)
+                console.log('[DevTools] Create story:', data.meta.componentName, 'name:', data.storyName)
 
                 // Generate and write the story file
                 if (writeStoryFiles && data.serializedProps) {
@@ -195,6 +197,33 @@ export default function componentHighlighterPlugin(
                       }
                     }
 
+                    // Determine the output path
+                    const componentDir = path.dirname(data.meta.filePath)
+                    const componentFileName = path.basename(
+                      data.meta.filePath,
+                      path.extname(data.meta.filePath)
+                    )
+                    let outputPath = path.join(
+                      componentDir,
+                      `${componentFileName}.stories.tsx`
+                    )
+                    if (storiesDir) {
+                      outputPath = path.join(
+                        componentDir,
+                        storiesDir,
+                        `${componentFileName}.stories.tsx`
+                      )
+                    }
+
+                    // Check if file already exists
+                    let existingContent: string | undefined
+                    if (fs.existsSync(outputPath)) {
+                      existingContent = fs.readFileSync(outputPath, 'utf-8')
+                      console.log(
+                        `[DevTools] Appending to existing story file: ${outputPath}`
+                      )
+                    }
+
                     const story = generateStory({
                       meta: {
                         componentName: data.meta.componentName,
@@ -204,19 +233,9 @@ export default function componentHighlighterPlugin(
                       },
                       props: data.serializedProps,
                       componentRegistry: registryMap,
+                      ...(data.storyName ? { storyName: data.storyName } : {}),
+                      ...(existingContent ? { existingContent } : {}),
                     })
-
-                    // Determine the output path
-                    let outputPath = story.filePath
-                    if (storiesDir) {
-                      const componentDir = path.dirname(data.meta.filePath)
-                      const storyFileName = path.basename(story.filePath)
-                      outputPath = path.join(
-                        componentDir,
-                        storiesDir,
-                        storyFileName
-                      )
-                    }
 
                     // Ensure the directory exists
                     const outputDir = path.dirname(outputPath)
@@ -227,7 +246,7 @@ export default function componentHighlighterPlugin(
                     // Write the story file
                     fs.writeFileSync(outputPath, story.content, 'utf-8')
                     console.log(
-                      `[DevTools] Story file created: ${outputPath}`
+                      `[DevTools] Story "${story.storyName}" ${existingContent ? 'added to' : 'created in'}: ${outputPath}`
                     )
 
                     // Notify the client about the created file
@@ -238,6 +257,8 @@ export default function componentHighlighterPlugin(
                         data: {
                           filePath: outputPath,
                           componentName: data.meta.componentName,
+                          storyName: story.storyName,
+                          isAppend: !!existingContent,
                         },
                       })
                     }

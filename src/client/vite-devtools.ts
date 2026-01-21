@@ -1,38 +1,54 @@
 /// <reference types="@vitejs/devtools-kit" />
 /// <reference types="vite/client" />
 import type { DockClientScriptContext } from '@vitejs/devtools-kit/client'
-import { enableOverlay, disableOverlay, overlayEvents } from './overlay'
+import { overlayEvents, showStoryCreationFeedback } from './overlay'
+import { enableHighlightMode, disableHighlightMode } from './listeners'
 
 export default function clientScriptSetup(ctx: DockClientScriptContext): void {
-  console.log('clientScriptSetup called', ctx)
+  console.log('[component-highlighter] clientScriptSetup called')
+
+  // When dock is activated, enable highlight mode
   ctx.current.events.on('entry:activated', () => {
-    console.log('dock activated - setting up log-info listener')
-    enableOverlay()
+    console.log('[component-highlighter] dock activated - enabling highlight mode')
+    enableHighlightMode()
   })
 
-  // Set up event listener when dock is activated (like vue-tracer does)
-  overlayEvents.on('log-info', (data) => {
-    console.log('log-info event received, calling RPC:', data)
+  // When dock is deactivated, disable highlight mode
+  ctx.current.events.on('entry:deactivated', () => {
+    console.log('[component-highlighter] dock deactivated - disabling highlight mode')
+    disableHighlightMode()
+  })
+
+  // Listen for "Create Story" button clicks from overlay
+  overlayEvents.on('log-info', async (data) => {
+    console.log('[component-highlighter] log-info event received, calling RPC:', data.meta.componentName, 'story:', data.storyName)
+
+    try {
       // Pass serialized props and component registry to the server
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ; (ctx.rpc.call as any)('component-highlighter:create-story', {
+      await (ctx.rpc.call as any)('component-highlighter:create-story', {
         meta: data.meta,
         props: data.props,
         serializedProps: data.serializedProps,
         componentRegistry: data.componentRegistry,
+        storyName: data.storyName,
       })
+
+      console.log('[component-highlighter] RPC call successful')
+      // Show success feedback in overlay
+      showStoryCreationFeedback('success')
+    } catch (error) {
+      console.error('[component-highlighter] RPC call failed:', error)
+      // Show error feedback in overlay
+      showStoryCreationFeedback('error')
+    }
   })
 
-  ctx.current.events.on('entry:deactivated', () => {
-    console.log('dock deactivated')
-    disableOverlay()
-  })
-
-  // Listen for story creation confirmation from the server
+  // Listen for story creation confirmation from the server via HMR
   if (import.meta.hot) {
     import.meta.hot.on('component-highlighter:story-created', (data: { filePath: string; componentName: string }) => {
-      console.log(`✅ Story created for ${data.componentName}: ${data.filePath}`)
-      // Could show a toast notification here
+      console.log(`[component-highlighter] ✅ Story created for ${data.componentName}: ${data.filePath}`)
+      showStoryCreationFeedback('success', data.filePath)
     })
   }
 }

@@ -10,6 +10,7 @@ import {
   showHoverMenu,
   hideHoverMenu,
   hasSelection,
+  clearSelection,
 } from './overlay'
 
 // Type declarations for devtools
@@ -24,6 +25,29 @@ const componentRegistry = new Map<string, ComponentInstance>()
 
 // Set the registry reference for overlay module
 setComponentRegistry(componentRegistry)
+
+// Track if the dock is active (highlight mode)
+let isDockActive = false
+
+/**
+ * Enable highlight mode (called when dock is activated)
+ */
+export function enableHighlightMode() {
+  console.log('[component-highlighter] enableHighlightMode called')
+  isDockActive = true
+  enableOverlay()
+}
+
+/**
+ * Disable highlight mode (called when dock is deactivated)
+ */
+export function disableHighlightMode() {
+  console.log('[component-highlighter] disableHighlightMode called')
+  isDockActive = false
+  clearSelection()
+  disableOverlay()
+  hideHoverMenu()
+}
 
 // Event listeners for registry synchronization
 if (typeof window !== 'undefined') {
@@ -134,12 +158,10 @@ function findComponentAtPoint(x: number, y: number): ComponentInstance | null {
   return null
 }
 
-// Event handling state
-let isAltActive = false
-
 // Mouse move handler with debouncing
 const handleMouseMove = debounce((event: MouseEvent) => {
-  if (!isAltActive) return
+  // Only respond when dock is active (highlight mode is on)
+  if (!isDockActive) return
 
   const instance = findComponentAtPoint(event.clientX, event.clientY)
   updateHover(instance?.id || null)
@@ -150,8 +172,9 @@ const handleMouseMove = debounce((event: MouseEvent) => {
   if (instance) {
     // Update rect for this instance
     instance.rect = instance.element.getBoundingClientRect()
-    // Show hover menu
+    // Show hover menu (tooltip)
     showHoverMenu(instance, event.clientX, event.clientY)
+    console.log('[component-highlighter] hovering:', instance.meta.componentName)
   } else {
     // Hide hover menu when not hovering over a component
     hideHoverMenu()
@@ -174,47 +197,26 @@ const handleMouseMove = debounce((event: MouseEvent) => {
 
 // Click handler
 function handleClick(event: MouseEvent) {
+  // Only respond when dock is active (highlight mode is on)
+  if (!isDockActive) return
+
   console.log('[component-highlighter] handleClick called', {
-    selectedComponentId: null,
-    isAltActive,
-    hasContextMenu: false,
+    isDockActive,
+    hasSelection: hasSelection(),
   })
 
   const instance = findComponentAtPoint(event.clientX, event.clientY)
 
-  // Only allow new selections when Alt is held
-  if (!isAltActive) return
-
-  // Prevent default context menu
-  event.preventDefault()
-
   if (instance) {
-    console.log('[component-highlighter] component clicked', {
-      id: instance.id,
-      meta: instance.meta,
-    })
+    console.log('[component-highlighter] component clicked:', instance.meta.componentName)
     selectComponent(instance, event.clientX, event.clientY)
   }
 }
 
-// Keyboard handlers
+// Keyboard handlers (Shift+H to highlight all still works)
 function handleKeyDown(event: KeyboardEvent) {
-  console.log('[component-highlighter] keydown event', {
-    key: event.key,
-    altKey: event.altKey,
-    shiftKey: event.shiftKey,
-  })
-  if (event.key === 'Alt') {
-    if (!isAltActive) {
-      isAltActive = true
-      enableOverlay()
-      console.log(
-        '[component-highlighter] Alt down - enabling overlay, components:',
-        componentRegistry.size
-      )
-    }
-  } else if (event.key === 'H' && event.shiftKey) {
-    // Shift + H to highlight all components
+  if (event.key === 'H' && event.shiftKey && isDockActive) {
+    // Shift + H to highlight all components (only when dock is active)
     event.preventDefault()
     const enabled = toggleHighlightAll()
     console.log(
@@ -224,24 +226,11 @@ function handleKeyDown(event: KeyboardEvent) {
       componentRegistry.size
     )
   }
-}
 
-function handleKeyUp(event: KeyboardEvent) {
-  if (event.key === 'Alt') {
-    if (isAltActive) {
-      console.log('[component-highlighter] Alt up')
-      isAltActive = false
-
-      // Clear hover state and hide hover menu
-      updateHover(null)
-      hideHoverMenu()
-
-      // Only disable overlay completely if no component is selected
-      if (!hasSelection()) {
-        disableOverlay()
-      }
-      // Note: We don't call clearSelection() here anymore - let the context menu handle it
-    }
+  // Escape to close selection
+  if (event.key === 'Escape' && isDockActive && hasSelection()) {
+    console.log('[component-highlighter] Escape pressed, clearing selection')
+    clearSelection()
   }
 }
 
@@ -250,13 +239,14 @@ if (typeof window !== 'undefined') {
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('click', handleClick)
   document.addEventListener('keydown', handleKeyDown)
-  document.addEventListener('keyup', handleKeyUp)
 
   // Update component positions on scroll
   window.addEventListener(
     'scroll',
     () => {
-      updateInstanceRects()
+      if (isDockActive) {
+        updateInstanceRects()
+      }
     },
     { passive: true }
   )
@@ -265,6 +255,7 @@ if (typeof window !== 'undefined') {
   const setupRPC = () => {
     if (window.__vite_devtools_kit_rpc__) {
       const rpc = window.__vite_devtools_kit_rpc__
+      console.log('[component-highlighter] RPC connected')
 
       rpc.on('component-highlighter:create-story', (data: any) => {
         // Dispatch custom event for external listeners
@@ -278,26 +269,23 @@ if (typeof window !== 'undefined') {
       rpc.on(
         'component-highlighter:toggle-overlay',
         (data: { enabled: boolean }) => {
-          if (data.enabled) {
-            enableOverlay()
-          } else {
-            disableOverlay()
-          }
           console.log('[component-highlighter] toggle-overlay received', data)
+          if (data.enabled) {
+            enableHighlightMode()
+          } else {
+            disableHighlightMode()
+          }
 
           // Reflect state back to dock UI
           rpc.emit('component-highlighter:toggle-overlay', {
             enabled: data.enabled,
           })
-          console.log('[component-highlighter] toggle-overlay echo', {
-            enabled: data.enabled,
-          })
         }
       )
 
-      // Send initial overlay state to dock UI (overlay is disabled by default now)
+      // Send initial overlay state to dock UI (overlay is disabled by default)
       rpc.emit('component-highlighter:toggle-overlay', { enabled: false })
-      console.log('[component-highlighter] initial overlay disabled')
+      console.log('[component-highlighter] initial state sent: disabled')
     } else {
       // Retry setup after a short delay
       setTimeout(setupRPC, 100)

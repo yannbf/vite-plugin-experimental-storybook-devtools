@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
-import { MyButton } from './MyButton'
-import { Other } from './Other'
+import { MyButton } from './components/Button'
+import { WithChildren } from './WithChildren'
+import { Emoji } from './Emoji'
 
 export function App() {
   useEffect(() => {
@@ -22,16 +23,16 @@ export function App() {
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
       <div style={{ marginTop: '20px' }}>
-        <MyButton type="primary" />
+        <MyButton variant="primary">Primary</MyButton>
       </div>
 
-      <Other label="Other" mode="primary" deepObject={{ value: 'test', nested: { value: 'nested' } }}>
-        With children!
-        <MyButton type="primary" />
-      </Other>
+      <h2>Some non-component Heading</h2>
+      <MyButton variant="secondary" size="small">With JSX emoji <Emoji /></MyButton>
 
-      <h2>Some Heading</h2>
-      <MyButton type="secondary" size="small" />
+      <WithChildren label="Other" mode="primary" deepObject={{ value: 'test', nested: { value: 'nested' } }}>
+        With children!
+        <MyButton size="small">Small button</MyButton>
+      </WithChildren>
     </div>
   )
 }

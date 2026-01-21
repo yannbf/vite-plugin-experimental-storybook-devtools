@@ -9,6 +9,7 @@ export interface OverlayEvents {
     props: Record<string, unknown>
     serializedProps?: SerializedProps
     componentRegistry?: Record<string, string>
+    storyName?: string
   }) => void
 }
 
@@ -41,6 +42,29 @@ function escapeHtml(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
+}
+
+// Suggest a story name based on props
+function suggestStoryName(props: Record<string, unknown>): string {
+  // Common prop names that make good story names
+  const meaningfulProps = ['variant', 'type', 'size', 'mode', 'status', 'kind', 'color', 'intent', 'appearance']
+
+  for (const propName of meaningfulProps) {
+    const value = props[propName]
+    if (typeof value === 'string' && value.length > 0 && value.length < 30) {
+      // Capitalize first letter
+      return value.charAt(0).toUpperCase() + value.slice(1)
+    }
+  }
+
+  // Check for boolean props that are true
+  for (const [key, value] of Object.entries(props)) {
+    if (value === true && !key.startsWith('_')) {
+      return key.charAt(0).toUpperCase() + key.slice(1)
+    }
+  }
+
+  return 'Default'
 }
 
 // Canvas overlay management
@@ -195,6 +219,8 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
     })
     .join('')
 
+  const suggestedName = suggestStoryName(props)
+
   contextMenuElement.innerHTML = `
     <div style="padding: 12px;">
       <div style="font-weight: bold; color: #2563eb; margin-bottom: 8px;">${meta.componentName
@@ -205,11 +231,20 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
         <div style="font-weight: bold; margin-bottom: 4px;">Props:</div>
         <div>${propsHtml || '<span style="color: #9ca3af;">none</span>'}</div>
       </div>
-      <button id="create-story-btn" style="background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+      <div style="margin-bottom: 8px;">
+        <label style="font-weight: bold; display: block; margin-bottom: 4px; font-size: 12px;">Story Name:</label>
+        <input 
+          id="story-name-input" 
+          type="text" 
+          value="${suggestedName}"
+          style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; box-sizing: border-box;"
+          placeholder="Enter story name..."
+        />
+      </div>
+      <button id="create-story-btn" style="background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
         Create Story
       </button>
     </div>
-    <div style="position: absolute; bottom: -6px; left: 20px; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid white; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));"></div>
   `
 
   document.body.appendChild(contextMenuElement)
@@ -218,7 +253,27 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
   const createStoryBtn = contextMenuElement.querySelector(
     '#create-story-btn'
   ) as HTMLButtonElement
+  const storyNameInput = contextMenuElement.querySelector(
+    '#story-name-input'
+  ) as HTMLInputElement
+
+  // Select input text on focus for easy editing
+  storyNameInput.addEventListener('focus', () => {
+    storyNameInput.select()
+  })
+
+  // Allow Enter key to submit
+  storyNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      createStoryBtn.click()
+    }
+  })
+
   createStoryBtn.addEventListener('click', () => {
+    // Get the story name from input
+    const storyName = storyNameInput.value.trim() || suggestedName
+
     // Get the component registry for import resolution
     const getRegistry = (window as unknown as { __componentHighlighterGetRegistry?: () => Map<string, string> }).__componentHighlighterGetRegistry
     let componentRegistryObj: Record<string, string> = {}
@@ -232,11 +287,13 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
       props: typeof props
       serializedProps: SerializedProps | undefined
       componentRegistry: Record<string, string>
+      storyName: string
     } = {
       meta,
       props,
       serializedProps,
       componentRegistry: componentRegistryObj,
+      storyName,
     }
 
     console.log('Component Info:', componentInfo)
@@ -245,17 +302,9 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
     console.log('Emitting log-info event:', componentInfo)
     overlayEvents.emit('log-info', componentInfo as Parameters<typeof overlayEvents.emit<'log-info'>>[1])
 
-    // Show feedback
+    // Show feedback - button state will be updated by showStoryCreationFeedback
     createStoryBtn.textContent = 'Creating...'
     createStoryBtn.disabled = true
-
-    // Reset button after a short delay
-    setTimeout(() => {
-      if (createStoryBtn) {
-        createStoryBtn.textContent = 'Create Story'
-        createStoryBtn.disabled = false
-      }
-    }, 2000)
   })
 
   // Close on click outside
@@ -398,4 +447,35 @@ export function updateInstanceRects() {
 
 export function hasSelection(): boolean {
   return selectedComponentId !== null
+}
+
+/**
+ * Show feedback for story creation (success or error)
+ */
+export function showStoryCreationFeedback(status: 'success' | 'error', filePath?: string): void {
+  const createStoryBtn = contextMenuElement?.querySelector('#create-story-btn') as HTMLButtonElement | null
+
+  if (!createStoryBtn) {
+    console.log('[component-highlighter] No create-story button found for feedback')
+    return
+  }
+
+  if (status === 'success') {
+    createStoryBtn.textContent = '✓ Created!'
+    createStoryBtn.style.background = '#16a34a'
+    console.log('[component-highlighter] Story creation success feedback shown', filePath)
+  } else {
+    createStoryBtn.textContent = '✗ Failed'
+    createStoryBtn.style.background = '#dc2626'
+    console.log('[component-highlighter] Story creation error feedback shown')
+  }
+
+  // Reset button after a delay
+  setTimeout(() => {
+    if (createStoryBtn && contextMenuElement?.contains(createStoryBtn)) {
+      createStoryBtn.textContent = 'Create Story'
+      createStoryBtn.style.background = '#2563eb'
+      createStoryBtn.disabled = false
+    }
+  }, 2000)
 }

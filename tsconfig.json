@@ -13,5 +13,5 @@
     "emitDeclarationOnly": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "playground/src/MyButton.tsx"]
+  "include": ["src"]
 }
