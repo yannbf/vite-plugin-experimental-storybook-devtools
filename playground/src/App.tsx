@@ -21,26 +21,17 @@ export function App() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <h1>Component Highlighter Demo</h1>
-      <p>Hover over the button below to see the component highlighter in action!</p>
-      <p>Press <kbd>Shift + H</kbd> to toggle the overlay.</p>
-      <p>Open DevTools to see the Component Highlighter dock panel.</p>
-
       <div style={{ marginTop: '20px' }}>
         <MyButton type="primary" />
       </div>
 
-      <Other label="Other" mode="primary" deepObject={{ value: 'test', nested: { value: 'nested' } }} />
+      <Other label="Other" mode="primary" deepObject={{ value: 'test', nested: { value: 'nested' } }}>
+        With children!
+        <MyButton type="primary" />
+      </Other>
 
-      <div style={{ marginTop: '40px', padding: '20px', background: 'transparent', borderRadius: '8px' }}>
-        <h2>How to use:</h2>
-        <ol>
-          <li>Hover over the button above</li>
-          <li>See the blue overlay highlight</li>
-          <li>Check the DevTools dock panel for component details</li>
-          <li>Click "Create Story" to trigger the event</li>
-        </ol>
-      </div>
+      <h2>Some Heading</h2>
+      <MyButton type="secondary" size="small" />
     </div>
   )
 }

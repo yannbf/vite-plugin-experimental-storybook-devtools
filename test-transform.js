@@ -1,5 +1,5 @@
 // Simple test script for the transform function
-const { transform } = require('./dist/component-highlighter-plugin-23YLWg0c.mjs')
+import { transform } from './dist/component-highlighter-plugin-BlFm08z-.mjs'
 
 const testCode = `
 import React from 'react'

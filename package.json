@@ -1,5 +1,5 @@
 {
-  "name": "react-components-starter",
+  "name": "vite-plugin-component-highlighter",
   "type": "module",
   "version": "0.0.0",
   "description": "A starter for creating a React component library.",
@@ -14,9 +14,12 @@
     "url": "https://github.com/author/library/issues"
   },
   "exports": {
-    ".": "./dist/index.js",
-    "./plugin": "./dist/component-highlighter-plugin.js",
-    "./package.json": "./package.json"
+    ".": "./dist/index.mjs",
+    "./plugin": "./dist/component-highlighter-plugin.mjs",
+    "./package.json": "./package.json",
+    "./client/overlay": "./dist/client/overlay.mjs",
+    "./client/listeners": "./dist/client/listeners.mjs",
+    "./client/vite-devtools": "./dist/client/vite-devtools.mjs"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -60,6 +63,7 @@
     "@babel/generator": "^7.28.6",
     "@babel/parser": "^7.28.6",
     "@babel/traverse": "^7.28.6",
-    "@babel/types": "^7.28.6"
+    "@babel/types": "^7.28.6",
+    "nanoevents": "^9.0.0"
   }
 }

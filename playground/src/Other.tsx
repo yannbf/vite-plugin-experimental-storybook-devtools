@@ -1,7 +1,7 @@
 import React from 'react'
 import { YetAnother } from './YetAnother'
 
-export const Other = ({ label, mode, deepObject }) => {
+export const Other = ({ label, mode, deepObject, children }) => {
   console.log('Other rendered')
   return (
     <div className="other">
@@ -9,6 +9,7 @@ export const Other = ({ label, mode, deepObject }) => {
       <p>mode: {mode}</p>
       <p>deepObject: {JSON.stringify(deepObject)}</p>
       <YetAnother type="opaque" />
+      {children}
     </div>
   )
 }

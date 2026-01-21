@@ -61,3 +61,4 @@ export function MyComponent(props) {
     expect(result).toBeUndefined()
   })
 })
+
