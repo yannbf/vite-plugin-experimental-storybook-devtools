@@ -1,0 +1,437 @@
+import { describe, it, expect } from 'vitest'
+import { generateStory, generateStoryName } from '../src/story-generator'
+
+describe('generateStory', () => {
+  const baseMeta = {
+    componentName: 'Button',
+    filePath: '/project/src/components/Button.tsx',
+    relativeFilePath: 'src/components/Button.tsx',
+    sourceId: 'abc123',
+    isDefaultExport: false,
+  }
+
+  describe('basic story generation', () => {
+    it('should generate a basic story file', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          label: 'Click me',
+          disabled: false,
+        },
+      })
+
+      expect(result.content).toContain("import type { Meta, StoryObj } from '@storybook/react-vite'")
+      expect(result.content).toContain("import { Button } from './Button'")
+      expect(result.content).toContain('component: Button')
+      expect(result.content).toContain('export default meta')
+      expect(result.content).toContain('label: "Click me"')
+      expect(result.content).toContain('disabled: false')
+    })
+
+    it('should use default export import syntax for default exports', () => {
+      const result = generateStory({
+        meta: { ...baseMeta, isDefaultExport: true },
+        props: { label: 'Test' },
+      })
+
+      expect(result.content).toContain("import Button from './Button'")
+    })
+
+    it('should use named export import syntax for named exports', () => {
+      const result = generateStory({
+        meta: { ...baseMeta, isDefaultExport: false },
+        props: { label: 'Test' },
+      })
+
+      expect(result.content).toContain("import { Button } from './Button'")
+    })
+  })
+
+  describe('story naming', () => {
+    it('should use custom story name when provided', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { label: 'Test' },
+        storyName: 'CustomName',
+      })
+
+      // Note: toValidStoryName converts to lowercase then capitalizes each word
+      expect(result.content).toContain('export const Customname: Story')
+      expect(result.storyName).toBe('Customname')
+    })
+
+    it('should generate story name from variant prop', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { variant: 'primary' },
+      })
+
+      expect(result.content).toContain('export const Primary: Story')
+    })
+
+    it('should generate story name from type prop', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { type: 'submit' },
+      })
+
+      expect(result.content).toContain('export const Submit: Story')
+    })
+
+    it('should fallback to Snapshot when no meaningful props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { someRandomProp: 'value' },
+      })
+
+      expect(result.content).toContain('export const Snapshot: Story')
+    })
+
+    it('should convert story name to valid identifier', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {},
+        storyName: 'my cool story!',
+      })
+
+      expect(result.content).toContain('export const MyCoolStory: Story')
+    })
+  })
+
+  describe('props serialization', () => {
+    it('should handle string props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { label: 'Hello World' },
+      })
+
+      expect(result.content).toContain('label: "Hello World"')
+    })
+
+    it('should handle number props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { count: 42 },
+      })
+
+      expect(result.content).toContain('count: 42')
+    })
+
+    it('should handle boolean props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { disabled: true, loading: false },
+      })
+
+      expect(result.content).toContain('disabled: true')
+      expect(result.content).toContain('loading: false')
+    })
+
+    it('should handle null props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { value: null },
+      })
+
+      expect(result.content).toContain('value: null')
+    })
+
+    it('should handle object props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          config: {
+            theme: 'dark',
+            size: 'large',
+          },
+        },
+      })
+
+      expect(result.content).toContain('config: {')
+      expect(result.content).toContain('theme: "dark"')
+      expect(result.content).toContain('size: "large"')
+    })
+
+    it('should handle array props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          items: ['a', 'b', 'c'],
+        },
+      })
+
+      expect(result.content).toContain('items: [')
+      expect(result.content).toContain('"a"')
+      expect(result.content).toContain('"b"')
+      expect(result.content).toContain('"c"')
+    })
+
+    it('should handle JSX props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          icon: {
+            __isJSX: true,
+            source: '<Icon name="star" />',
+            componentRefs: ['Icon'],
+          },
+        },
+      })
+
+      expect(result.content).toContain('icon: <Icon name="star" />')
+    })
+
+    it('should handle function props with fn()', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          onClick: {
+            __isFunction: true,
+            name: 'onClick',
+          },
+        },
+      })
+
+      expect(result.content).toContain('onClick: fn()')
+      expect(result.content).toContain("import { fn } from 'storybook/test'")
+    })
+
+    it('should handle multiple function props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          onClick: { __isFunction: true, name: 'onClick' },
+          onHover: { __isFunction: true, name: 'onHover' },
+          onChange: { __isFunction: true, name: 'onChange' },
+        },
+      })
+
+      expect(result.content).toContain('onClick: fn()')
+      expect(result.content).toContain('onHover: fn()')
+      expect(result.content).toContain('onChange: fn()')
+      // Should only have one fn import
+      expect(result.content.match(/import \{ fn \}/g)?.length).toBe(1)
+    })
+  })
+
+  describe('import resolution', () => {
+    it('should add imports for JSX component references', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          icon: {
+            __isJSX: true,
+            source: '<Icon name="star" />',
+            componentRefs: ['Icon'],
+          },
+        },
+        componentRegistry: new Map([
+          ['Icon', '/project/src/components/Icon.tsx'],
+        ]),
+      })
+
+      expect(result.content).toContain("import { Icon } from './Icon'")
+    })
+
+    it('should handle relative imports from different directories', () => {
+      const result = generateStory({
+        meta: {
+          ...baseMeta,
+          filePath: '/project/src/pages/Home.tsx',
+        },
+        props: {
+          header: {
+            __isJSX: true,
+            source: '<Header />',
+            componentRefs: ['Header'],
+          },
+        },
+        componentRegistry: new Map([
+          ['Header', '/project/src/components/Header.tsx'],
+        ]),
+      })
+
+      expect(result.content).toContain("import { Header } from '../components/Header'")
+    })
+
+    it('should not import self-references', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          child: {
+            __isJSX: true,
+            source: '<Button />',
+            componentRefs: ['Button'],
+          },
+        },
+        componentRegistry: new Map([
+          ['Button', '/project/src/components/Button.tsx'],
+        ]),
+      })
+
+      // Should only have one Button import (the main component)
+      const buttonImports = result.content.match(/import.*Button/g)
+      expect(buttonImports?.length).toBe(1)
+    })
+  })
+
+  describe('appending to existing files', () => {
+    const existingContent = `import React from 'react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Button } from './Button';
+
+const meta: Meta<typeof Button> = {
+  component: Button,
+};
+
+export default meta;
+type Story = StoryObj<typeof Button>;
+
+export const Primary: Story = {
+  args: {
+    label: "Primary",
+  },
+};
+`
+
+    it('should append a new story to existing file', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { label: 'Secondary' },
+        storyName: 'Secondary',
+        existingContent,
+      })
+
+      expect(result.content).toContain('export const Primary: Story')
+      expect(result.content).toContain('export const Secondary: Story')
+      expect(result.content).toContain('label: "Secondary"')
+    })
+
+    it('should generate unique story name if already exists', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: { label: 'Another Primary' },
+        storyName: 'Primary',
+        existingContent,
+      })
+
+      expect(result.content).toContain('export const Primary: Story')
+      expect(result.content).toContain('export const Primary2: Story')
+    })
+
+    it('should increment suffix for multiple duplicates', () => {
+      const contentWithTwoStories = existingContent + `
+export const Primary2: Story = {
+  args: {
+    label: "Primary 2",
+  },
+};
+`
+      const result = generateStory({
+        meta: baseMeta,
+        props: { label: 'Another' },
+        storyName: 'Primary',
+        existingContent: contentWithTwoStories,
+      })
+
+      expect(result.content).toContain('export const Primary3: Story')
+    })
+
+    it('should add fn import when appending story with function props', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          onClick: { __isFunction: true, name: 'onClick' },
+        },
+        storyName: 'WithClick',
+        existingContent,
+      })
+
+      expect(result.content).toContain("import { fn } from 'storybook/test'")
+      expect(result.content).toContain('onClick: fn()')
+    })
+
+    it('should not duplicate fn import if already exists', () => {
+      const contentWithFn = `import React from 'react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { fn } from 'storybook/test';
+import { Button } from './Button';
+
+const meta: Meta<typeof Button> = {
+  component: Button,
+};
+
+export default meta;
+type Story = StoryObj<typeof Button>;
+
+export const Primary: Story = {
+  args: {
+    onClick: fn(),
+  },
+};
+`
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          onClick: { __isFunction: true, name: 'onClick' },
+        },
+        storyName: 'Secondary',
+        existingContent: contentWithFn,
+      })
+
+      // Should only have one fn import
+      const fnImports = result.content.match(/import.*fn.*from.*storybook\/test/g)
+      expect(fnImports?.length).toBe(1)
+    })
+  })
+
+  describe('file path generation', () => {
+    it('should generate correct story file path', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {},
+      })
+
+      expect(result.filePath).toBe('/project/src/components/Button.stories.tsx')
+    })
+  })
+})
+
+describe('generateStoryName', () => {
+  it('should use variant prop', () => {
+    expect(generateStoryName({ variant: 'primary' })).toBe('Primary')
+  })
+
+  it('should use type prop', () => {
+    expect(generateStoryName({ type: 'submit' })).toBe('Submit')
+  })
+
+  it('should use size prop', () => {
+    expect(generateStoryName({ size: 'large' })).toBe('Large')
+  })
+
+  it('should use mode prop', () => {
+    expect(generateStoryName({ mode: 'dark' })).toBe('Dark')
+  })
+
+  it('should use status prop', () => {
+    expect(generateStoryName({ status: 'error' })).toBe('Error')
+  })
+
+  it('should use kind prop', () => {
+    expect(generateStoryName({ kind: 'ghost' })).toBe('Ghost')
+  })
+
+  it('should prioritize variant over other props', () => {
+    expect(generateStoryName({ variant: 'primary', type: 'submit' })).toBe('Primary')
+  })
+
+  it('should return Snapshot for empty props', () => {
+    expect(generateStoryName({})).toBe('Snapshot')
+  })
+
+  it('should return Snapshot for non-meaningful props', () => {
+    expect(generateStoryName({ children: 'text', className: 'btn' })).toBe('Snapshot')
+  })
+})
+

@@ -3,3 +3,10 @@ dist
 *.log
 .DS_Store
 .pnpm-store
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

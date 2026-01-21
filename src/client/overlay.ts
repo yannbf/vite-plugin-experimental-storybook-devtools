@@ -38,11 +38,13 @@ const COLORS = {
 let highlightContainer: HTMLDivElement | null = null
 let highlightElements: Map<string, HTMLDivElement> = new Map()
 let contextMenuElement: HTMLDivElement | null = null
+let debugOverlayElement: HTMLDivElement | null = null
 let isOverlayEnabled = false
 let isHighlightAllActive = false
 let currentHoveredId: string | null = null
 let selectedComponentId: string | null = null
 let currentCloseHandler: ((e: MouseEvent) => void) | null = null
+let currentEscapeHandler: ((e: KeyboardEvent) => void) | null = null
 
 // Cache for story file existence checks
 const storyFileCache: Map<string, { hasStory: boolean; storyPath: string | null }> = new Map()
@@ -302,6 +304,11 @@ async function drawAllHighlights() {
       highlightElements.delete(id)
     }
   }
+
+  // Update debug overlay if visible
+  if (debugOverlayElement) {
+    updateDebugOverlay()
+  }
 }
 
 function handleHighlightClick(instance: ComponentInstance, e: MouseEvent) {
@@ -507,11 +514,19 @@ async function showContextMenu(instance: ComponentInstance, x: number, y: number
       selectedComponentId = null
       hideContextMenu()
       drawAllHighlights()
-      document.removeEventListener('click', currentCloseHandler!)
-      currentCloseHandler = null
     }
   }
   setTimeout(() => document.addEventListener('click', currentCloseHandler!), 10)
+
+  // Close on Escape key
+  currentEscapeHandler = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      selectedComponentId = null
+      hideContextMenu()
+      drawAllHighlights()
+    }
+  }
+  document.addEventListener('keydown', currentEscapeHandler)
 }
 
 function hideContextMenu() {
@@ -522,6 +537,10 @@ function hideContextMenu() {
   if (currentCloseHandler) {
     document.removeEventListener('click', currentCloseHandler)
     currentCloseHandler = null
+  }
+  if (currentEscapeHandler) {
+    document.removeEventListener('keydown', currentEscapeHandler)
+    currentEscapeHandler = null
   }
   currentContextMenuComponentPath = null
 }
@@ -595,12 +614,122 @@ export function disableOverlay() {
   currentHoveredId = null
   hideHoverMenu()
   removeHighlightContainer()
+  hideDebugOverlay()
+}
+
+// Debug overlay functions
+function createDebugOverlay(): HTMLDivElement {
+  if (debugOverlayElement) return debugOverlayElement
+
+  debugOverlayElement = document.createElement('div')
+  debugOverlayElement.id = 'component-highlighter-debug'
+  debugOverlayElement.style.cssText = `
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 2147483647;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 180px;
+  `
+  document.body.appendChild(debugOverlayElement)
+  return debugOverlayElement
+}
+
+function updateDebugOverlay() {
+  if (!debugOverlayElement) return
+
+  // Count unique components by sourceId (same component definition)
+  const uniqueSourceIds = new Set<string>()
+  const componentsWithStories = new Set<string>()
+  let totalComponents = 0
+
+  if (componentRegistry) {
+    for (const instance of componentRegistry.values()) {
+      if (!instance.element.isConnected) continue
+      totalComponents++
+      uniqueSourceIds.add(instance.meta.sourceId)
+
+      // Check if this component has a story
+      const storyInfo = storyFileCache.get(instance.meta.filePath)
+      if (storyInfo?.hasStory) {
+        componentsWithStories.add(instance.meta.sourceId)
+      }
+    }
+  }
+
+  const uniqueCount = uniqueSourceIds.size
+  const withStoriesCount = componentsWithStories.size
+  const coverage = uniqueCount > 0 ? Math.round((withStoriesCount / uniqueCount) * 100) : 0
+
+  // Color coding for coverage
+  let coverageColor = '#ef4444' // red
+  if (coverage >= 80) {
+    coverageColor = '#22c55e' // green
+  } else if (coverage >= 50) {
+    coverageColor = '#eab308' // yellow
+  } else if (coverage >= 25) {
+    coverageColor = '#f97316' // orange
+  }
+
+  debugOverlayElement.innerHTML = `
+    <div style="font-weight: 600; margin-bottom: 8px; color: #ec4899; display: flex; align-items: center; gap: 6px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 16v-4M12 8h.01"/>
+      </svg>
+      Component Stats
+    </div>
+    <div style="display: grid; gap: 4px;">
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: #9ca3af;">Total instances:</span>
+        <span style="font-weight: 500;">${totalComponents}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: #9ca3af;">Unique components:</span>
+        <span style="font-weight: 500;">${uniqueCount}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: #9ca3af;">With stories:</span>
+        <span style="font-weight: 500;">${withStoriesCount}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <span style="color: #9ca3af;">Coverage:</span>
+        <span style="font-weight: 600; color: ${coverageColor};">${coverage}%</span>
+      </div>
+    </div>
+  `
+}
+
+function showDebugOverlay() {
+  console.log('[component-highlighter] showDebugOverlay called')
+  createDebugOverlay()
+  updateDebugOverlay()
+  console.log('[component-highlighter] Debug overlay created:', !!debugOverlayElement)
+}
+
+function hideDebugOverlay() {
+  if (debugOverlayElement) {
+    debugOverlayElement.remove()
+    debugOverlayElement = null
+  }
 }
 
 export function setHighlightAll(enabled: boolean) {
   isHighlightAllActive = enabled
   if (enabled) {
     createHighlightContainer()
+    showDebugOverlay()
+  } else {
+    hideDebugOverlay()
   }
   drawAllHighlights()
 }
@@ -610,6 +739,9 @@ export function toggleHighlightAll() {
   if (isHighlightAllActive) {
     isOverlayEnabled = true
     createHighlightContainer()
+    showDebugOverlay()
+  } else {
+    hideDebugOverlay()
   }
   drawAllHighlights()
   return isHighlightAllActive
