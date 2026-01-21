@@ -24,6 +24,7 @@ interface ComponentHighlightData {
   meta: {
     componentName: string
     filePath: string
+    relativeFilePath?: string
     sourceId: string
     isDefaultExport?: boolean
   }
@@ -36,6 +37,7 @@ interface ComponentStoryData {
   meta: {
     componentName: string
     filePath: string
+    relativeFilePath?: string
     sourceId: string
     isDefaultExport?: boolean
   }
@@ -132,6 +134,56 @@ export default function componentHighlighterPlugin(
     },
     configureServer(srv) {
       server = srv
+
+      // Add middleware to check if story files exist
+      srv.middlewares.use('/__component-highlighter/check-story', (req, res) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        const componentPath = url.searchParams.get('componentPath')
+
+        if (!componentPath) {
+          res.statusCode = 400
+          res.end(JSON.stringify({ error: 'Missing componentPath parameter' }))
+          return
+        }
+
+        // Check for story file
+        const componentDir = path.dirname(componentPath)
+        const componentFileName = path.basename(
+          componentPath,
+          path.extname(componentPath)
+        )
+
+        // Check both with and without storiesDir
+        const possiblePaths = [
+          path.join(componentDir, `${componentFileName}.stories.tsx`),
+          path.join(componentDir, `${componentFileName}.stories.ts`),
+          path.join(componentDir, `${componentFileName}.stories.jsx`),
+          path.join(componentDir, `${componentFileName}.stories.js`),
+        ]
+
+        if (storiesDir) {
+          possiblePaths.push(
+            path.join(componentDir, storiesDir, `${componentFileName}.stories.tsx`),
+            path.join(componentDir, storiesDir, `${componentFileName}.stories.ts`),
+            path.join(componentDir, storiesDir, `${componentFileName}.stories.jsx`),
+            path.join(componentDir, storiesDir, `${componentFileName}.stories.js`)
+          )
+        }
+
+        let storyPath: string | null = null
+        for (const p of possiblePaths) {
+          if (fs.existsSync(p)) {
+            storyPath = p
+            break
+          }
+        }
+
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({
+          hasStory: !!storyPath,
+          storyPath,
+        }))
+      })
     },
     devtools: {
       setup(ctx) {
@@ -228,6 +280,7 @@ export default function componentHighlighterPlugin(
                       meta: {
                         componentName: data.meta.componentName,
                         filePath: data.meta.filePath,
+                        relativeFilePath: data.meta.relativeFilePath ?? path.relative(process.cwd(), data.meta.filePath),
                         sourceId: data.meta.sourceId,
                         isDefaultExport: data.meta.isDefaultExport ?? false,
                       },
@@ -257,6 +310,7 @@ export default function componentHighlighterPlugin(
                         data: {
                           filePath: outputPath,
                           componentName: data.meta.componentName,
+                          componentPath: data.meta.filePath,
                           storyName: story.storyName,
                           isAppend: !!existingContent,
                         },

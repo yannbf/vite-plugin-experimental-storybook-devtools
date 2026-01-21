@@ -1,6 +1,7 @@
 export interface ComponentMeta {
   componentName: string
   filePath: string
+  relativeFilePath: string
   sourceId: string
   isDefaultExport: boolean
   line?: number

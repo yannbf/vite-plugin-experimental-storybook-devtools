@@ -35,8 +35,7 @@ export default function clientScriptSetup(ctx: DockClientScriptContext): void {
       })
 
       console.log('[component-highlighter] RPC call successful')
-      // Show success feedback in overlay
-      showStoryCreationFeedback('success')
+      // Feedback will be shown via HMR event from server
     } catch (error) {
       console.error('[component-highlighter] RPC call failed:', error)
       // Show error feedback in overlay
@@ -46,9 +45,13 @@ export default function clientScriptSetup(ctx: DockClientScriptContext): void {
 
   // Listen for story creation confirmation from the server via HMR
   if (import.meta.hot) {
-    import.meta.hot.on('component-highlighter:story-created', (data: { filePath: string; componentName: string }) => {
+    import.meta.hot.on('component-highlighter:story-created', (data: {
+      filePath: string
+      componentName: string
+      componentPath?: string
+    }) => {
       console.log(`[component-highlighter] ✅ Story created for ${data.componentName}: ${data.filePath}`)
-      showStoryCreationFeedback('success', data.filePath)
+      showStoryCreationFeedback('success', data.filePath, data.componentPath)
     })
   }
 }

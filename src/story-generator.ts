@@ -11,7 +11,12 @@ export interface JSXSerializedValue {
   componentRefs: string[]
 }
 
-export type SerializedValue = JSXSerializedValue | unknown
+export interface FunctionSerializedValue {
+  __isFunction: true
+  name: string
+}
+
+export type SerializedValue = JSXSerializedValue | FunctionSerializedValue | unknown
 
 export interface StoryGenerationData {
   meta: ComponentMeta
@@ -163,6 +168,23 @@ function appendStoryToExisting(options: {
   // Add any missing imports
   let updatedContent = existingContent
 
+  // Check if we need fn import and add it if missing
+  const needsFnImport = hasAnyFunctionProps(props)
+  if (needsFnImport && !existingContent.includes("from 'storybook/test'")) {
+    // Add fn import after existing imports
+    const lastImportMatch = updatedContent.match(/^(import\s+.+from\s+['"][^'"]+['"];?\s*\n)+/m)
+    if (lastImportMatch) {
+      const insertPos = lastImportMatch.index! + lastImportMatch[0].length
+      updatedContent = updatedContent.slice(0, insertPos) + `import { fn } from 'storybook/test';\n` + updatedContent.slice(insertPos)
+    }
+  } else if (needsFnImport && existingContent.includes("from 'storybook/test'") && !existingContent.includes('fn')) {
+    // Extend existing storybook/test import to include fn
+    updatedContent = updatedContent.replace(
+      /import\s*\{([^}]+)\}\s*from\s*['"]@storybook\/test['"]/,
+      (_match, existingImports) => `import { ${existingImports.trim()}, fn } from 'storybook/test'`
+    )
+  }
+
   for (const imp of imports) {
     // Skip if import already exists (simple check)
     const importName = imp.name.replace(/[{}]/g, '').trim()
@@ -242,6 +264,35 @@ function isJSXSerializedValue(value: unknown): value is JSXSerializedValue {
 }
 
 /**
+ * Type guard for function serialized values
+ */
+function isFunctionSerializedValue(value: unknown): value is FunctionSerializedValue {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '__isFunction' in value &&
+    (value as FunctionSerializedValue).__isFunction === true
+  )
+}
+
+/**
+ * Check if props contain any function serialized values
+ */
+function hasAnyFunctionProps(props: SerializedProps): boolean {
+  for (const value of Object.values(props)) {
+    if (isFunctionSerializedValue(value)) {
+      return true
+    }
+    if (typeof value === 'object' && value !== null && !isJSXSerializedValue(value)) {
+      if (hasAnyFunctionProps(value as SerializedProps)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+/**
  * Get relative import path from one file to another
  */
 function getRelativeImportPath(fromDir: string, toFile: string): string {
@@ -270,10 +321,14 @@ function generateStoryContent(options: {
 }): string {
   const { componentName, imports, props, storyName } = options
 
+  // Check if we need to import fn from storybook/test
+  const needsFnImport = hasAnyFunctionProps(props)
+
   // Build import statements
   const importStatements = [
     `import React from 'react';`,
     `import type { Meta, StoryObj } from '@storybook/react-vite';`,
+    ...(needsFnImport ? [`import { fn } from 'storybook/test';`] : []),
     ...imports.map((imp) => `import ${imp.name} from '${imp.path}';`),
   ].join('\n')
 
@@ -349,6 +404,11 @@ function formatPropValue(value: unknown, indentLevel: number): string {
     return jsxSource
   }
 
+  // Handle function serialized values - emit fn()
+  if (isFunctionSerializedValue(value)) {
+    return 'fn()'
+  }
+
   // Handle null/undefined
   if (value === null) return 'null'
   if (value === undefined) return 'undefined'
@@ -361,7 +421,7 @@ function formatPropValue(value: unknown, indentLevel: number): string {
 
   // Handle functions (as placeholders)
   if (typeof value === 'function') {
-    return '() => {}'
+    return 'fn()'
   }
 
   // Handle arrays

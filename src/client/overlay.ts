@@ -16,15 +16,36 @@ export interface OverlayEvents {
 export const overlayEvents: Emitter<OverlayEvents> =
   createNanoEvents<OverlayEvents>()
 
+// Storybook icon SVG (mini version)
+const STORYBOOK_ICON_SVG = `<svg width="16" height="16" viewBox="-31.5 0 319 319" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#FF4785" d="M9.87,293.32L0.01,30.57C-0.31,21.9,6.34,14.54,15.01,14L238.49,0.03C247.32,-0.52,254.91,6.18,255.47,15.01C255.49,15.34,255.5,15.67,255.5,16V302.32C255.5,311.16,248.33,318.32,239.49,318.32C239.25,318.32,239.01,318.32,238.77,318.31L25.15,308.71C16.83,308.34,10.18,301.65,9.87,293.32Z"/>
+  <path fill="#FFF" d="M188.67,39.13L190.19,2.41L220.88,0L222.21,37.86C222.25,39.18,221.22,40.29,219.9,40.33C219.34,40.35,218.79,40.17,218.34,39.82L206.51,30.5L192.49,41.13C191.44,41.93,189.95,41.72,189.15,40.67C188.81,40.23,188.64,39.68,188.67,39.13ZM149.41,119.98C149.41,126.21,191.36,123.22,196.99,118.85C196.99,76.45,174.23,54.17,132.57,54.17C90.91,54.17,67.57,76.79,67.57,110.74C67.57,169.85,147.35,170.98,147.35,203.23C147.35,212.28,142.91,217.65,133.16,217.65C120.46,217.65,115.43,211.17,116.02,189.1C116.02,184.32,67.57,182.82,66.09,189.1C62.33,242.57,95.64,257.99,133.75,257.99C170.69,257.99,199.65,238.3,199.65,202.66C199.65,139.3,118.68,141,118.68,109.6C118.68,96.88,128.14,95.18,133.75,95.18C139.66,95.18,150.3,96.22,149.41,119.98Z"/>
+</svg>`
+
+// Colors for highlights - simplified color scheme
+const COLORS = {
+  // Blue for non-hovered elements when Option is held
+  other: { stroke: '#3b82f6', bg: 'rgba(59, 130, 246, 0.05)' },
+  // Pink for hovered element (solid stroke)
+  hovered: { stroke: '#ec4899', bg: 'rgba(236, 72, 153, 0.05)' },
+  // Pink for same type instances (dashed stroke)
+  sameType: { stroke: '#ec4899', bg: 'rgba(236, 72, 153, 0.05)', dashed: true },
+  // Pink for selected element (higher opacity)
+  selected: { stroke: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' },
+}
+
 // Global state for overlay management
-let canvasElement: HTMLCanvasElement | null = null
-let canvasContext: CanvasRenderingContext2D | null = null
+let highlightContainer: HTMLDivElement | null = null
+let highlightElements: Map<string, HTMLDivElement> = new Map()
 let contextMenuElement: HTMLDivElement | null = null
 let isOverlayEnabled = false
 let isHighlightAllActive = false
 let currentHoveredId: string | null = null
 let selectedComponentId: string | null = null
 let currentCloseHandler: ((e: MouseEvent) => void) | null = null
+
+// Cache for story file existence checks
+const storyFileCache: Map<string, { hasStory: boolean; storyPath: string | null }> = new Map()
 
 // Import component registry from listeners
 let componentRegistry: Map<string, ComponentInstance>
@@ -67,113 +88,250 @@ function suggestStoryName(props: Record<string, unknown>): string {
   return 'Default'
 }
 
-// Canvas overlay management
-function createCanvasOverlay() {
-  if (canvasElement) return
+// Check if a component has a story file
+async function checkStoryFile(componentPath: string): Promise<{ hasStory: boolean; storyPath: string | null }> {
+  // Check cache first
+  if (storyFileCache.has(componentPath)) {
+    return storyFileCache.get(componentPath)!
+  }
 
-  canvasElement = document.createElement('canvas')
-  canvasElement.style.cssText = `
+  try {
+    const response = await fetch(
+      `/__component-highlighter/check-story?componentPath=${encodeURIComponent(componentPath)}`
+    )
+    if (response.ok) {
+      const result = await response.json()
+      storyFileCache.set(componentPath, result)
+      return result
+    }
+  } catch (e) {
+    console.warn('[component-highlighter] Failed to check story file:', e)
+  }
+
+  const defaultResult = { hasStory: false, storyPath: null }
+  storyFileCache.set(componentPath, defaultResult)
+  return defaultResult
+}
+
+// Open a file in the editor
+async function openInEditor(filePath: string) {
+  try {
+    await fetch(`/__open-in-editor?file=${encodeURIComponent(filePath)}`)
+    console.log('[component-highlighter] Opened file:', filePath)
+  } catch (e) {
+    console.error('[component-highlighter] Failed to open file:', e)
+  }
+}
+
+// DOM-based highlight overlay management
+function createHighlightContainer() {
+  if (highlightContainer) return
+
+  highlightContainer = document.createElement('div')
+  highlightContainer.id = 'component-highlighter-container'
+  highlightContainer.style.cssText = `
     position: fixed;
     top: 0;
     left: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
     z-index: 999998;
-    opacity: 0.8;
   `
-  canvasContext = canvasElement.getContext('2d')!
-  document.body.appendChild(canvasElement)
-
-  // Resize canvas to match viewport
-  function resizeCanvas() {
-    if (canvasElement) {
-      canvasElement.width = window.innerWidth
-      canvasElement.height = window.innerHeight
-    }
-  }
-
-  resizeCanvas()
-  window.addEventListener('resize', resizeCanvas)
+  document.body.appendChild(highlightContainer)
 }
 
-function clearCanvas() {
-  if (canvasContext && canvasElement) {
-    canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height)
+function removeHighlightContainer() {
+  if (highlightContainer) {
+    highlightContainer.remove()
+    highlightContainer = null
   }
+  highlightElements.clear()
 }
 
-function drawBorder(instance: ComponentInstance, color: string, thickness = 2) {
-  if (!canvasContext || !instance.rect) return
+function createHighlightElement(instance: ComponentInstance): HTMLDivElement {
+  const el = document.createElement('div')
+  el.dataset['highlightId'] = instance.id
+  el.style.cssText = `
+    position: fixed;
+    box-sizing: border-box;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+  `
+  return el
+}
+
+function updateHighlightElement(
+  el: HTMLDivElement,
+  instance: ComponentInstance,
+  type: 'hovered' | 'sameType' | 'other' | 'selected',
+  hasStory: boolean
+) {
+  if (!instance.rect) return
 
   const rect = instance.rect
-  canvasContext.strokeStyle = color
-  canvasContext.lineWidth = thickness
-  canvasContext.strokeRect(rect.left, rect.top, rect.width, rect.height)
+  const colorConfig = COLORS[type]
+
+  el.style.left = `${rect.left}px`
+  el.style.top = `${rect.top}px`
+  el.style.width = `${rect.width}px`
+  el.style.height = `${rect.height}px`
+  el.style.backgroundColor = colorConfig.bg
+
+  // Apply dashed stroke for same type instances
+  if ('dashed' in colorConfig && colorConfig.dashed) {
+    el.style.border = 'none'
+    el.style.outline = `1px dashed ${colorConfig.stroke}`
+    el.style.outlineOffset = '-1px'
+  } else {
+    el.style.border = `1px solid ${colorConfig.stroke}`
+    el.style.outline = 'none'
+  }
+
+  // Add or remove Storybook icon
+  let iconEl = el.querySelector('.storybook-icon') as HTMLDivElement | null
+
+  if (hasStory) {
+    if (!iconEl) {
+      iconEl = document.createElement('div')
+      iconEl.className = 'storybook-icon'
+      iconEl.style.cssText = `
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 16px;
+        height: 16px;
+        pointer-events: none;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+      `
+      iconEl.innerHTML = STORYBOOK_ICON_SVG
+      el.appendChild(iconEl)
+    }
+  } else if (iconEl) {
+    iconEl.remove()
+  }
 }
 
-function drawAllBorders() {
-  clearCanvas()
-  if (!canvasContext) return
+async function drawAllHighlights() {
+  if (!highlightContainer) return
 
   const instances = Array.from(componentRegistry.values())
 
   // Find the component name to highlight (either hovered or selected)
   let highlightComponentName: string | null = null
   if (selectedComponentId) {
-    // When a component is selected, highlight other instances of the same type
-    const selectedInstance = instances.find(
-      (inst) => inst.id === selectedComponentId
-    )
+    const selectedInstance = instances.find((inst) => inst.id === selectedComponentId)
     if (selectedInstance) {
       highlightComponentName = selectedInstance.meta.componentName
     }
   } else if (currentHoveredId && isOverlayEnabled) {
-    // When hovering, highlight other instances of the same type
-    const hoveredInstance = instances.find(
-      (inst) => inst.id === currentHoveredId
-    )
+    const hoveredInstance = instances.find((inst) => inst.id === currentHoveredId)
     if (hoveredInstance) {
       highlightComponentName = hoveredInstance.meta.componentName
     }
   }
 
-  for (const instance of instances) {
+  // Track which elements we've used
+  const usedIds = new Set<string>()
+
+  // Check story files in parallel
+  const storyChecks = instances.map(async (instance) => {
+    const storyInfo = await checkStoryFile(instance.meta.filePath)
+    return { instance, storyInfo }
+  })
+
+  const instancesWithStories = await Promise.all(storyChecks)
+
+  for (const { instance, storyInfo } of instancesWithStories) {
     if (!instance.rect) continue
 
-    let color = '#999999' // Default gray for inactive
-    let shouldDraw = false
+    let shouldShow = false
+    let type: 'hovered' | 'sameType' | 'other' | 'selected' = 'other'
 
     if (selectedComponentId === instance.id) {
-      color = '#ff6b35' // Orange for selected
-      shouldDraw = true
+      type = 'selected'
+      shouldShow = true
     } else if (currentHoveredId === instance.id && isOverlayEnabled) {
-      color = '#4ade80' // Green for hovered (only when overlay is enabled)
-      shouldDraw = true
+      type = 'hovered'
+      shouldShow = true
     } else if (isHighlightAllActive) {
-      color = '#3b82f6' // Blue for highlight all
-      shouldDraw = true
+      // When highlighting all with Option held
+      if (highlightComponentName && instance.meta.componentName === highlightComponentName) {
+        // Same type as hovered - show as sameType (pink dashed)
+        type = 'sameType'
+      } else {
+        // Other components - show as blue
+        type = 'other'
+      }
+      shouldShow = true
     } else if (
       highlightComponentName &&
       instance.meta.componentName === highlightComponentName &&
-      instance.id !== selectedComponentId // Don't highlight the selected component again
+      instance.id !== selectedComponentId &&
+      instance.id !== currentHoveredId
     ) {
-      // Highlight other instances of the same component type with blue
-      color = '#3b82f6' // Blue for same component type
-      shouldDraw = true
+      // Same type instances when hovering (without Option held)
+      type = 'sameType'
+      shouldShow = true
     }
 
-    if (shouldDraw) {
-      drawBorder(instance, color)
+    if (shouldShow) {
+      usedIds.add(instance.id)
+
+      let el = highlightElements.get(instance.id)
+      if (!el) {
+        el = createHighlightElement(instance)
+        el.addEventListener('click', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          handleHighlightClick(instance, e)
+        })
+        highlightElements.set(instance.id, el)
+        highlightContainer!.appendChild(el)
+      }
+
+      updateHighlightElement(el, instance, type, storyInfo.hasStory)
+    }
+  }
+
+  // Remove unused highlight elements
+  for (const [id, el] of highlightElements.entries()) {
+    if (!usedIds.has(id)) {
+      el.remove()
+      highlightElements.delete(id)
     }
   }
 }
 
+function handleHighlightClick(instance: ComponentInstance, e: MouseEvent) {
+  console.log('[component-highlighter] highlight clicked:', instance.meta.componentName)
+  selectComponent(instance, e.clientX, e.clientY)
+}
+
+function clearAllHighlights() {
+  for (const el of highlightElements.values()) {
+    el.remove()
+  }
+  highlightElements.clear()
+}
+
+// Store current context menu's component path for updates
+let currentContextMenuComponentPath: string | null = null
+
 // Context menu management
-function showContextMenu(instance: ComponentInstance, x: number, y: number) {
+async function showContextMenu(instance: ComponentInstance, x: number, y: number) {
   hideContextMenu()
 
   const meta = instance.meta
   const props = instance.props
   const serializedProps = instance.serializedProps
+
+  // Check if story file exists
+  const storyInfo = await checkStoryFile(meta.filePath)
+
+  // Store for potential updates
+  currentContextMenuComponentPath = meta.filePath
 
   contextMenuElement = document.createElement('div')
   contextMenuElement.style.cssText = `
@@ -185,8 +343,8 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
     border-radius: 6px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     z-index: 9999999;
-    min-width: 300px;
-    max-width: 400px;
+    min-width: 320px;
+    max-width: 420px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
   `
@@ -220,34 +378,70 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
     .join('')
 
   const suggestedName = suggestStoryName(props)
+  const relativePath = meta.relativeFilePath || meta.filePath
 
-  contextMenuElement.innerHTML = `
-    <div style="padding: 12px;">
-      <div style="font-weight: bold; color: #2563eb; margin-bottom: 8px;">${meta.componentName
-    }</div>
-      <div style="color: #6b7280; font-size: 12px; margin-bottom: 8px;">${meta.filePath
-    }</div>
-      <div style="margin-bottom: 8px;">
-        <div style="font-weight: bold; margin-bottom: 4px;">Props:</div>
-        <div>${propsHtml || '<span style="color: #9ca3af;">none</span>'}</div>
-      </div>
-      <div style="margin-bottom: 8px;">
-        <label style="font-weight: bold; display: block; margin-bottom: 4px; font-size: 12px;">Story Name:</label>
-        <input 
-          id="story-name-input" 
-          type="text" 
-          value="${suggestedName}"
-          style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; box-sizing: border-box;"
-          placeholder="Enter story name..."
-        />
-      </div>
-      <button id="create-story-btn" style="background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
-        Create Story
+  // Build the open buttons - both styled the same (gray)
+  const openButtonsHtml = `
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <button id="open-component-btn" style="flex: 1; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+          <polyline points="13 2 13 9 20 9"></polyline>
+        </svg>
+        Open Component
+      </button>
+      <button id="open-stories-btn" style="flex: 1; background: #f3f4f6; color: ${storyInfo.hasStory ? '#374151' : '#9ca3af'}; border: 1px solid #d1d5db; padding: 6px 10px; border-radius: 4px; cursor: ${storyInfo.hasStory ? 'pointer' : 'not-allowed'}; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px;" ${storyInfo.hasStory ? '' : 'disabled'}>
+        ${STORYBOOK_ICON_SVG.replace('width="16" height="16"', 'width="12" height="12"')}
+        ${storyInfo.hasStory ? 'Open Stories' : 'No Stories'}
       </button>
     </div>
   `
 
+  contextMenuElement.innerHTML = `
+    <div style="padding: 12px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        ${storyInfo.hasStory ? STORYBOOK_ICON_SVG : ''}
+        <span style="font-weight: bold; color: #2563eb;">${meta.componentName}</span>
+      </div>
+      <div style="color: #6b7280; font-size: 11px; margin-bottom: 10px; word-break: break-all;">${relativePath}</div>
+      ${openButtonsHtml}
+      <div style="margin-bottom: 8px;">
+        <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">Props:</div>
+        <div style="max-height: 120px; overflow-y: auto;">${propsHtml || '<span style="color: #9ca3af;">none</span>'}</div>
+      </div>
+      <div style="border-top: 1px solid #e5e7eb; padding-top: 10px; margin-top: 10px;">
+        <div style="margin-bottom: 8px;">
+          <label style="font-weight: bold; display: block; margin-bottom: 4px; font-size: 12px;">Story Name:</label>
+          <input 
+            id="story-name-input" 
+            type="text" 
+            value="${suggestedName}"
+            style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; box-sizing: border-box;"
+            placeholder="Enter story name..."
+          />
+        </div>
+        <button id="create-story-btn" style="background: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; font-weight: 500;">
+          ${storyInfo.hasStory ? 'Add Story' : 'Create Story'}
+        </button>
+      </div>
+    </div>
+  `
+
   document.body.appendChild(contextMenuElement)
+
+  // Add click handlers for the open buttons
+  const openComponentBtn = contextMenuElement.querySelector('#open-component-btn') as HTMLButtonElement
+  const openStoriesBtn = contextMenuElement.querySelector('#open-stories-btn') as HTMLButtonElement
+
+  openComponentBtn.addEventListener('click', () => {
+    openInEditor(meta.filePath)
+  })
+
+  if (storyInfo.hasStory && storyInfo.storyPath) {
+    openStoriesBtn.addEventListener('click', () => {
+      openInEditor(storyInfo.storyPath!)
+    })
+  }
 
   // Add click handler for the create story button
   const createStoryBtn = contextMenuElement.querySelector(
@@ -312,7 +506,7 @@ function showContextMenu(instance: ComponentInstance, x: number, y: number) {
     if (!contextMenuElement!.contains(e.target as Node)) {
       selectedComponentId = null
       hideContextMenu()
-      drawAllBorders()
+      drawAllHighlights()
       document.removeEventListener('click', currentCloseHandler!)
       currentCloseHandler = null
     }
@@ -329,6 +523,7 @@ function hideContextMenu() {
     document.removeEventListener('click', currentCloseHandler)
     currentCloseHandler = null
   }
+  currentContextMenuComponentPath = null
 }
 
 // Hover menu management
@@ -344,14 +539,18 @@ export function showHoverMenu(
 
   const meta = instance.meta
 
+  // Check story status from cache (don't await, use cached value)
+  const storyInfo = storyFileCache.get(meta.filePath)
+  const hasStory = storyInfo?.hasStory ?? false
+
   hoverMenuElement = document.createElement('div')
   hoverMenuElement.style.cssText = `
     position: fixed;
     left: ${x + 10}px;
     top: ${y + 10}px;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.85);
     color: white;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
     font-size: 12px;
     font-family: monospace;
@@ -359,9 +558,16 @@ export function showHoverMenu(
     z-index: 999999;
     max-width: 300px;
     word-break: break-all;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   `
 
-  hoverMenuElement.textContent = `<${meta.componentName}>`
+  const iconHtml = hasStory
+    ? `<span style="display: flex; align-items: center;">${STORYBOOK_ICON_SVG.replace('width="16" height="16"', 'width="14" height="14"')}</span>`
+    : ''
+
+  hoverMenuElement.innerHTML = `${iconHtml}<span>&lt;${meta.componentName}&gt;</span>`
   document.body.appendChild(hoverMenuElement)
 }
 
@@ -379,38 +585,40 @@ export function hideHoverMenu() {
 // Public API
 export function enableOverlay() {
   isOverlayEnabled = true
-  createCanvasOverlay()
-  // Don't draw borders immediately - wait for hover or selection
+  createHighlightContainer()
 }
 
 export function disableOverlay() {
   isOverlayEnabled = false
-  clearCanvas()
+  isHighlightAllActive = false
+  clearAllHighlights()
   currentHoveredId = null
   hideHoverMenu()
-  if (!isHighlightAllActive) {
-    if (canvasElement) {
-      canvasElement.remove()
-      canvasElement = null
-      canvasContext = null
-    }
+  removeHighlightContainer()
+}
+
+export function setHighlightAll(enabled: boolean) {
+  isHighlightAllActive = enabled
+  if (enabled) {
+    createHighlightContainer()
   }
+  drawAllHighlights()
 }
 
 export function toggleHighlightAll() {
   isHighlightAllActive = !isHighlightAllActive
   if (isHighlightAllActive) {
     isOverlayEnabled = true
-    createCanvasOverlay()
+    createHighlightContainer()
   }
-  drawAllBorders()
+  drawAllHighlights()
   return isHighlightAllActive
 }
 
 export function updateHover(instanceId: string | null) {
   currentHoveredId = instanceId
   if (isOverlayEnabled) {
-    drawAllBorders()
+    drawAllHighlights()
   }
 }
 
@@ -420,19 +628,16 @@ export function selectComponent(
   y: number
 ) {
   selectedComponentId = instance.id
-  drawAllBorders()
+  drawAllHighlights()
   showContextMenu(instance, x, y)
 }
 
 export function clearSelection() {
   selectedComponentId = null
   hideContextMenu()
-  drawAllBorders()
+  drawAllHighlights()
 
-  // Disable overlay when selection is cleared (unless highlight-all is active)
-  if (!isHighlightAllActive) {
-    disableOverlay()
-  }
+  // Don't disable overlay - keep it enabled while dock is active
 }
 
 export function updateInstanceRects() {
@@ -442,17 +647,75 @@ export function updateInstanceRects() {
       instance.rect = instance.element.getBoundingClientRect()
     }
   }
-  drawAllBorders()
+  drawAllHighlights()
 }
 
 export function hasSelection(): boolean {
   return selectedComponentId !== null
 }
 
+export function isHighlightAllEnabled(): boolean {
+  return isHighlightAllActive
+}
+
+// Invalidate story cache for a specific path (called after story creation)
+export function invalidateStoryCache(componentPath: string) {
+  storyFileCache.delete(componentPath)
+}
+
+/**
+ * Update the "Open Stories" button in the context menu after story creation
+ */
+function updateOpenStoriesButton(storyPath: string) {
+  if (!contextMenuElement) return
+
+  const openStoriesBtn = contextMenuElement.querySelector('#open-stories-btn') as HTMLButtonElement | null
+  if (!openStoriesBtn) return
+
+  // Update button state
+  openStoriesBtn.textContent = '' // Clear first
+  openStoriesBtn.innerHTML = `
+    ${STORYBOOK_ICON_SVG.replace('width="16" height="16"', 'width="12" height="12"')}
+    Open Stories
+  `
+  openStoriesBtn.style.color = '#374151'
+  openStoriesBtn.style.cursor = 'pointer'
+  openStoriesBtn.disabled = false
+
+  // Add click handler (remove any existing first by cloning)
+  const newBtn = openStoriesBtn.cloneNode(true) as HTMLButtonElement
+  newBtn.innerHTML = openStoriesBtn.innerHTML
+  openStoriesBtn.parentNode?.replaceChild(newBtn, openStoriesBtn)
+
+  newBtn.addEventListener('click', () => {
+    openInEditor(storyPath)
+  })
+
+  // Also update the create story button text
+  const createStoryBtn = contextMenuElement.querySelector('#create-story-btn') as HTMLButtonElement | null
+  if (createStoryBtn && createStoryBtn.textContent?.includes('Created')) {
+    // After reset, it should say "Add Story"
+    setTimeout(() => {
+      if (createStoryBtn && contextMenuElement?.contains(createStoryBtn)) {
+        createStoryBtn.textContent = 'Add Story'
+      }
+    }, 2000)
+  }
+
+  // Add Storybook icon to header if not present
+  const header = contextMenuElement.querySelector('div > div:first-child')
+  if (header && !header.querySelector('svg')) {
+    const iconSpan = document.createElement('span')
+    iconSpan.innerHTML = STORYBOOK_ICON_SVG
+    iconSpan.style.display = 'flex'
+    header.insertBefore(iconSpan, header.firstChild)
+  }
+}
+
 /**
  * Show feedback for story creation (success or error)
  */
-export function showStoryCreationFeedback(status: 'success' | 'error', filePath?: string): void {
+export function showStoryCreationFeedback(status: 'success' | 'error', filePath?: string, componentPath?: string): void {
   const createStoryBtn = contextMenuElement?.querySelector('#create-story-btn') as HTMLButtonElement | null
 
   if (!createStoryBtn) {
@@ -464,6 +727,25 @@ export function showStoryCreationFeedback(status: 'success' | 'error', filePath?
     createStoryBtn.textContent = '✓ Created!'
     createStoryBtn.style.background = '#16a34a'
     console.log('[component-highlighter] Story creation success feedback shown', filePath)
+
+    // Invalidate cache so the icon appears
+    if (componentPath) {
+      invalidateStoryCache(componentPath)
+      // Re-check and update cache with new story path
+      checkStoryFile(componentPath).then((storyInfo) => {
+        if (storyInfo.hasStory && storyInfo.storyPath) {
+          updateOpenStoriesButton(storyInfo.storyPath)
+        }
+      })
+    }
+
+    // Also update if we have the filePath directly
+    if (filePath) {
+      updateOpenStoriesButton(filePath)
+    }
+
+    // Redraw highlights to show story icons
+    drawAllHighlights()
   } else {
     createStoryBtn.textContent = '✗ Failed'
     createStoryBtn.style.background = '#dc2626'
@@ -473,7 +755,9 @@ export function showStoryCreationFeedback(status: 'success' | 'error', filePath?
   // Reset button after a delay
   setTimeout(() => {
     if (createStoryBtn && contextMenuElement?.contains(createStoryBtn)) {
-      createStoryBtn.textContent = 'Create Story'
+      // Check if story now exists
+      const hasStory = storyFileCache.get(currentContextMenuComponentPath || '')?.hasStory
+      createStoryBtn.textContent = hasStory ? 'Add Story' : 'Create Story'
       createStoryBtn.style.background = '#2563eb'
       createStoryBtn.disabled = false
     }

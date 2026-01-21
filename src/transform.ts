@@ -3,6 +3,7 @@ import { parse } from '@babel/parser'
 import traverseModule from '@babel/traverse'
 import generatorModule from '@babel/generator'
 import * as t from '@babel/types'
+import * as path from 'path'
 
 const traverse = (traverseModule as any).default ?? traverseModule
 const generate = (generatorModule as any).default ?? generatorModule
@@ -35,10 +36,10 @@ export function transform(code: string, id: string): string | undefined {
     const componentsToWrap: Array<{
       name: string
       node:
-        | t.VariableDeclarator
-        | t.FunctionDeclaration
-        | t.ExportDefaultDeclaration
-        | t.ExportNamedDeclaration
+      | t.VariableDeclarator
+      | t.FunctionDeclaration
+      | t.ExportDefaultDeclaration
+      | t.ExportNamedDeclaration
       isDefaultExport: boolean
       isMemo: boolean
       isForwardRef: boolean
@@ -175,6 +176,7 @@ export function transform(code: string, id: string): string | undefined {
     ast.program.body.unshift(highlighterImport)
 
     // Transform components
+    const relativeFilePath = path.relative(process.cwd(), id)
     componentsToWrap.forEach(
       ({ name, node, isDefaultExport, isMemo, isForwardRef }) => {
         wrapComponent(
@@ -184,7 +186,8 @@ export function transform(code: string, id: string): string | undefined {
           isDefaultExport,
           isMemo,
           isForwardRef,
-          id
+          id,
+          relativeFilePath
         )
       }
     )
@@ -295,7 +298,8 @@ function wrapComponent(
   isDefaultExport: boolean,
   isMemo: boolean,
   isForwardRef: boolean,
-  filePath: string
+  filePath: string,
+  relativeFilePath: string
 ): void {
   const sourceId = createHash(filePath + ':' + componentName)
 
@@ -305,6 +309,7 @@ function wrapComponent(
       t.stringLiteral(componentName)
     ),
     t.objectProperty(t.identifier('filePath'), t.stringLiteral(filePath)),
+    t.objectProperty(t.identifier('relativeFilePath'), t.stringLiteral(relativeFilePath)),
     t.objectProperty(t.identifier('sourceId'), t.stringLiteral(sourceId)),
     t.objectProperty(
       t.identifier('isDefaultExport'),

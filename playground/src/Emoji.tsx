@@ -1,5 +1,7 @@
-export const Emoji = () => {
+import React from 'react'
+
+export const Emoji = ({ onClick }: { onClick?: () => void }) => {
   return (
-    <span>📸</span>
+    <span onClick={onClick}>📸</span>
   )
 }

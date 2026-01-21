@@ -2,15 +2,15 @@ import type { ComponentInstance } from '../virtual-module'
 import {
   enableOverlay,
   disableOverlay,
-  toggleHighlightAll,
+  setHighlightAll,
   updateHover,
-  selectComponent,
   updateInstanceRects,
   setComponentRegistry,
   showHoverMenu,
   hideHoverMenu,
   hasSelection,
   clearSelection,
+  isHighlightAllEnabled,
 } from './overlay'
 
 // Type declarations for devtools
@@ -29,6 +29,9 @@ setComponentRegistry(componentRegistry)
 // Track if the dock is active (highlight mode)
 let isDockActive = false
 
+// Track Option key state
+let isOptionHeld = false
+
 /**
  * Enable highlight mode (called when dock is activated)
  */
@@ -44,6 +47,7 @@ export function enableHighlightMode() {
 export function disableHighlightMode() {
   console.log('[component-highlighter] disableHighlightMode called')
   isDockActive = false
+  isOptionHeld = false
   clearSelection()
   disableOverlay()
   hideHoverMenu()
@@ -134,10 +138,26 @@ export function updateInstanceProps(
   )
 }
 
-// Find component at pointer position (deepest first)
+// Find component at pointer position
+// When Option is held, we don't need to find component at point for hovering
+// but we still need it for clicks
 function findComponentAtPoint(x: number, y: number): ComponentInstance | null {
-  // Get the deepest DOM element at the point
+  // When highlights are showing, we need to check what's under the pointer
+  // accounting for the highlight layer
+  const highlightContainer = document.getElementById('component-highlighter-container')
+
+  // Temporarily hide the highlight container to get the actual element
+  if (highlightContainer) {
+    highlightContainer.style.display = 'none'
+  }
+
   const elementAtPoint = document.elementFromPoint(x, y)
+
+  // Restore highlight container
+  if (highlightContainer) {
+    highlightContainer.style.display = ''
+  }
+
   if (!elementAtPoint) return null
 
   // Walk up the DOM tree from the deepest element to find component instances
@@ -163,65 +183,54 @@ const handleMouseMove = debounce((event: MouseEvent) => {
   // Only respond when dock is active (highlight mode is on)
   if (!isDockActive) return
 
-  const instance = findComponentAtPoint(event.clientX, event.clientY)
-  updateHover(instance?.id || null)
-
   // Update instance rects for all components (for overlay positioning)
   updateInstanceRects()
 
-  if (instance) {
-    // Update rect for this instance
-    instance.rect = instance.element.getBoundingClientRect()
-    // Show hover menu (tooltip)
-    showHoverMenu(instance, event.clientX, event.clientY)
-    console.log('[component-highlighter] hovering:', instance.meta.componentName)
-  } else {
-    // Hide hover menu when not hovering over a component
-    hideHoverMenu()
-  }
+  // When Option is held, all components are highlighted
+  // When Option is not held, only show highlight on hover
+  if (!isOptionHeld) {
+    const instance = findComponentAtPoint(event.clientX, event.clientY)
+    updateHover(instance?.id || null)
 
-  // Send to devtools if available
-  if (window.__vite_devtools_kit_rpc__) {
-    window.__vite_devtools_kit_rpc__.emit(
-      'component-highlighter:highlight-target',
-      instance
-        ? {
-          meta: instance.meta,
-          props: instance.props,
-          rect: instance.rect,
-        }
-        : null
-    )
+    if (instance) {
+      // Update rect for this instance
+      instance.rect = instance.element.getBoundingClientRect()
+      // Show hover menu (tooltip)
+      showHoverMenu(instance, event.clientX, event.clientY)
+    } else {
+      // Hide hover menu when not hovering over a component
+      hideHoverMenu()
+    }
+  } else {
+    // When Option is held, find component under cursor for hover highlight
+    const instance = findComponentAtPoint(event.clientX, event.clientY)
+    updateHover(instance?.id || null)
+
+    if (instance) {
+      showHoverMenu(instance, event.clientX, event.clientY)
+    } else {
+      hideHoverMenu()
+    }
   }
 }, 16) // ~60fps
 
-// Click handler
-function handleClick(event: MouseEvent) {
-  // Only respond when dock is active (highlight mode is on)
-  if (!isDockActive) return
-
-  console.log('[component-highlighter] handleClick called', {
-    isDockActive,
-    hasSelection: hasSelection(),
-  })
-
-  const instance = findComponentAtPoint(event.clientX, event.clientY)
-
-  if (instance) {
-    console.log('[component-highlighter] component clicked:', instance.meta.componentName)
-    selectComponent(instance, event.clientX, event.clientY)
-  }
-}
-
-// Keyboard handlers (Shift+H to highlight all still works)
+// Keyboard handlers
 function handleKeyDown(event: KeyboardEvent) {
+  // Option/Alt key handling
+  if (event.key === 'Alt' && isDockActive && !isOptionHeld) {
+    isOptionHeld = true
+    setHighlightAll(true)
+    console.log('[component-highlighter] Option held - showing all highlights')
+  }
+
+  // Shift+H to toggle sticky highlight-all mode
   if (event.key === 'H' && event.shiftKey && isDockActive) {
-    // Shift + H to highlight all components (only when dock is active)
     event.preventDefault()
-    const enabled = toggleHighlightAll()
+    const currentState = isHighlightAllEnabled()
+    setHighlightAll(!currentState)
     console.log(
       '[component-highlighter] highlight all toggled:',
-      enabled,
+      !currentState,
       'components:',
       componentRegistry.size
     )
@@ -234,11 +243,21 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 }
 
+function handleKeyUp(event: KeyboardEvent) {
+  // Option/Alt key release
+  if (event.key === 'Alt' && isOptionHeld) {
+    isOptionHeld = false
+    // Only disable highlight-all if it wasn't toggled sticky with Shift+H
+    setHighlightAll(false)
+    console.log('[component-highlighter] Option released - hiding non-hovered highlights')
+  }
+}
+
 // Initialize event listeners
 if (typeof window !== 'undefined') {
   document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('click', handleClick)
   document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('keyup', handleKeyUp)
 
   // Update component positions on scroll
   window.addEventListener(
@@ -299,8 +318,9 @@ if (typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   ; (window as any).__componentHighlighterRegistry = componentRegistry
     ; (window as any).__componentHighlighterToggle = () => {
-      const enabled = toggleHighlightAll()
-      return enabled
+      const currentState = isHighlightAllEnabled()
+      setHighlightAll(!currentState)
+      return !currentState
     }
     ; (window as any).__componentHighlighterDraw = () => {
       enableOverlay()
