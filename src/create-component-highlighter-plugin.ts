@@ -48,6 +48,8 @@ interface ComponentStoryData {
 }
 
 export interface ComponentHighlighterOptions {
+  /** URL of the Storybook instance */
+  storybookUrl?: string
   /**
    * Glob patterns to include for component instrumentation
    * @default ["**\/*.{tsx,jsx}"] for React, varies by framework
@@ -108,6 +110,7 @@ export function createComponentHighlighterPlugin(
     eventName = 'component-highlighter:create-story',
     enableOverlay = true,
     devtoolsDockId = 'component-highlighter',
+    storybookUrl = 'http://localhost:6006',
     force = false,
     debugMode = false,
     writeStoryFiles = true,
@@ -183,13 +186,21 @@ export function createComponentHighlighterPlugin(
         ctx.docks.register({
           id: devtoolsDockId,
           title: 'Component Highlighter',
-          icon: 'https://avatars.githubusercontent.com/u/22632046',
+          icon: 'ph:crosshair',
           type: 'action',
           action: {
             importFrom:
               'vite-plugin-experimental-storybook-devtools/client/vite-devtools',
             importName: 'default',
           },
+        })
+
+        ctx.docks.register({
+          id: 'storybook-panel',
+          title: 'Storybook',
+          icon: 'https://avatars.githubusercontent.com/u/22632046',
+          type: 'iframe',
+          url: storybookUrl,
         })
 
         // Register RPC functions for communication with the client
