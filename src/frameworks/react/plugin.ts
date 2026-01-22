@@ -7,8 +7,8 @@
  * ```
  */
 
-import { createComponentHighlighterPlugin, type ComponentHighlighterOptions } from './component-highlighter-plugin'
-import { reactFramework } from './frameworks/react'
+import { createComponentHighlighterPlugin, type ComponentHighlighterOptions } from '../../create-component-highlighter-plugin'
+import { reactFramework } from '.'
 
 /**
  * React Component Highlighter Plugin
@@ -35,6 +35,6 @@ export default function componentHighlighterReact(options: ComponentHighlighterO
 }
 
 // Re-export types
-export type { ComponentHighlighterOptions } from './component-highlighter-plugin'
-export { reactFramework } from './frameworks/react'
+export type { ComponentHighlighterOptions } from '../../create-component-highlighter-plugin'
+export { reactFramework } from '.'
 

@@ -8,16 +8,16 @@
  */
 
 // Core plugin factory (for advanced use cases)
-export { createComponentHighlighterPlugin, type ComponentHighlighterOptions } from './component-highlighter-plugin'
+export { createComponentHighlighterPlugin, type ComponentHighlighterOptions } from './create-component-highlighter-plugin'
 
 // Story generator
-export { generateStory, generateStoryName } from './story-generator'
+export { generateStory, generateStoryName } from './utils/story-generator'
 export type {
   SerializedProps,
   JSXSerializedValue,
   StoryGenerationData,
   GeneratedStory,
-} from './story-generator'
+} from './utils/story-generator'
 
 // Framework types
 export type {
@@ -32,4 +32,4 @@ export type {
 } from './frameworks'
 
 // Provider analyzer
-export { analyzeAppProviders, analyzeComponentFile } from './provider-analyzer'
+export { analyzeAppProviders, analyzeComponentFile } from './utils/provider-analyzer'

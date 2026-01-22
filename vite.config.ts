@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
 import { defineConfig } from 'vite'
 import { DevTools } from '@vitejs/devtools'
-import componentHighlighter from './src/react'
+import componentHighlighter from './src/frameworks/react/plugin'
 
 const r = (filepath: string) =>
   fileURLToPath(new URL(filepath, import.meta.url))

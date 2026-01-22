@@ -2,7 +2,7 @@
 import type { Plugin, ViteDevServer } from 'vite'
 import { createFilter } from 'vite'
 import type { FrameworkConfig, SerializedProps } from './frameworks'
-import { generateStory } from './story-generator'
+import { generateStory } from './utils/story-generator'
 import { defineRpcFunction } from '@vitejs/devtools-kit'
 import * as fs from 'fs'
 import * as path from 'path'

@@ -3,7 +3,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: [
     'src/index.ts',
-    'src/react.ts',
+    'src/frameworks/react/plugin.ts',
     'src/client/listeners.ts',
     'src/client/overlay.ts',
     'src/client/vite-devtools.ts',

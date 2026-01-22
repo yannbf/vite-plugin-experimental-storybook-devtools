@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateStory, generateStoryName } from '../src/story-generator'
+import { generateStory, generateStoryName } from '../src/utils/story-generator'
 
 describe('generateStory', () => {
   const baseMeta = {

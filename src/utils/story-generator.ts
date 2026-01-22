@@ -3,7 +3,7 @@ import type {
   SerializedProps,
   JSXSerializedValue,
   FunctionSerializedValue,
-} from './frameworks/types'
+} from '../frameworks/types'
 import * as path from 'path'
 
 // Re-export types for consumers
