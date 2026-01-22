@@ -1,7 +1,6 @@
 import type { ComponentInstance, SerializedProps } from '../frameworks/types'
 import type { Emitter } from 'nanoevents'
 import { createNanoEvents } from 'nanoevents'
-
 // Event emitter for overlay actions
 export interface OverlayEvents {
   'log-info': (data: {
@@ -16,7 +15,7 @@ export interface OverlayEvents {
 export const overlayEvents: Emitter<OverlayEvents> =
   createNanoEvents<OverlayEvents>()
 
-// Storybook icon SVG (mini version)
+// Storybook logo SVG
 const STORYBOOK_ICON_SVG = `<svg width="16" height="16" viewBox="-31.5 0 319 319" xmlns="http://www.w3.org/2000/svg">
   <path fill="#FF4785" d="M9.87,293.32L0.01,30.57C-0.31,21.9,6.34,14.54,15.01,14L238.49,0.03C247.32,-0.52,254.91,6.18,255.47,15.01C255.49,15.34,255.5,15.67,255.5,16V302.32C255.5,311.16,248.33,318.32,239.49,318.32C239.25,318.32,239.01,318.32,238.77,318.31L25.15,308.71C16.83,308.34,10.18,301.65,9.87,293.32Z"/>
   <path fill="#FFF" d="M188.67,39.13L190.19,2.41L220.88,0L222.21,37.86C222.25,39.18,221.22,40.29,219.9,40.33C219.34,40.35,218.79,40.17,218.34,39.82L206.51,30.5L192.49,41.13C191.44,41.93,189.95,41.72,189.15,40.67C188.81,40.23,188.64,39.68,188.67,39.13ZM149.41,119.98C149.41,126.21,191.36,123.22,196.99,118.85C196.99,76.45,174.23,54.17,132.57,54.17C90.91,54.17,67.57,76.79,67.57,110.74C67.57,169.85,147.35,170.98,147.35,203.23C147.35,212.28,142.91,217.65,133.16,217.65C120.46,217.65,115.43,211.17,116.02,189.1C116.02,184.32,67.57,182.82,66.09,189.1C62.33,242.57,95.64,257.99,133.75,257.99C170.69,257.99,199.65,238.3,199.65,202.66C199.65,139.3,118.68,141,118.68,109.6C118.68,96.88,128.14,95.18,133.75,95.18C139.66,95.18,150.3,96.22,149.41,119.98Z"/>
@@ -25,13 +24,13 @@ const STORYBOOK_ICON_SVG = `<svg width="16" height="16" viewBox="-31.5 0 319 319
 // Colors for highlights - simplified color scheme
 const COLORS = {
   // Blue for non-hovered elements when Option is held
-  other: { stroke: '#3b82f6', bg: 'rgba(59, 130, 246, 0.05)' },
+  other: { stroke: '#006DEB', bg: 'rgba(0, 109, 235, 0.05)' },
   // Pink for hovered element (solid stroke)
-  hovered: { stroke: '#ec4899', bg: 'rgba(236, 72, 153, 0.05)' },
-  // Pink for same type instances (dashed stroke)
-  sameType: { stroke: '#ec4899', bg: 'rgba(236, 72, 153, 0.05)', dashed: true },
+  hovered: { stroke: '#FF4785', bg: 'rgba(255, 71, 133, 0.05)' },
+  // Same type means same component instance as the one you're hovering
+  sameType: { stroke: '#FF4785', bg: 'rgba(255, 71, 133, 0.05)', dashed: true },
   // Pink for selected element (higher opacity)
-  selected: { stroke: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' },
+  selected: { stroke: '#FF4785', bg: 'rgba(255, 71, 133, 0.2)' },
 }
 
 // Global state for overlay management
@@ -199,15 +198,15 @@ function updateHighlightElement(
   el.style.height = `${rect.height}px`
   el.style.backgroundColor = colorConfig.bg
 
-  // Apply dashed stroke for same type instances
+  // Use outline for all strokes to ensure consistent icon positioning
+  // Dashed for same type instances, solid for others
+  el.style.border = 'none'
   if ('dashed' in colorConfig && colorConfig.dashed) {
-    el.style.border = 'none'
     el.style.outline = `1px dashed ${colorConfig.stroke}`
-    el.style.outlineOffset = '-1px'
   } else {
-    el.style.border = `1px solid ${colorConfig.stroke}`
-    el.style.outline = 'none'
+    el.style.outline = `1px solid ${colorConfig.stroke}`
   }
+  el.style.outlineOffset = '-1px'
 
   // Add or remove Storybook icon
   let iconEl = el.querySelector('.storybook-icon') as HTMLDivElement | null
@@ -710,10 +709,7 @@ function updateDebugOverlay() {
 
   debugOverlayElement.innerHTML = `
     <div style="font-weight: 600; margin-bottom: 8px; color: #ec4899; display: flex; align-items: center; gap: 6px;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M12 16v-4M12 8h.01"/>
-      </svg>
+      ${STORYBOOK_ICON_SVG}
       Component Stats
     </div>
     <div style="display: grid; gap: 4px;">

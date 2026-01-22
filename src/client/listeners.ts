@@ -13,18 +13,18 @@ import {
   isHighlightAllEnabled,
 } from './overlay'
 
-// Type declarations for devtools
+// Type declarations for globals
 declare global {
   interface Window {
-    __vite_devtools_kit_rpc__?: any
+    __componentHighlighterRegistry?: Map<string, ComponentInstance>
+    __componentHighlighterToggle?: () => boolean
+    __componentHighlighterDraw?: () => void
+    __componentHighlighterInitialized?: boolean
   }
 }
 
 // Component registry - maintained locally and synced via events
 const componentRegistry = new Map<string, ComponentInstance>()
-
-// Set the registry reference for overlay module
-setComponentRegistry(componentRegistry)
 
 // Track if the dock is active (highlight mode)
 let isDockActive = false
@@ -36,7 +36,6 @@ let isOptionHeld = false
  * Enable highlight mode (called when dock is activated)
  */
 export function enableHighlightMode() {
-  console.log('[component-highlighter] enableHighlightMode called')
   isDockActive = true
   enableOverlay()
 }
@@ -45,7 +44,6 @@ export function enableHighlightMode() {
  * Disable highlight mode (called when dock is deactivated)
  */
 export function disableHighlightMode() {
-  console.log('[component-highlighter] disableHighlightMode called')
   isDockActive = false
   isOptionHeld = false
   clearSelection()
@@ -53,64 +51,16 @@ export function disableHighlightMode() {
   hideHoverMenu()
 }
 
-// Event listeners for registry synchronization
-if (typeof window !== 'undefined') {
-  console.log('[component-highlighter] setting up event listeners')
-
-  window.addEventListener('component-highlighter:register', ((
-    event: CustomEvent
-  ) => {
-    const instance = event.detail
-    componentRegistry.set(instance.id, instance)
-    console.log(
-      '[component-highlighter] component registered via event:',
-      instance.id,
-      instance.meta.componentName,
-      'total:',
-      componentRegistry.size
-    )
-  }) as EventListener)
-
-  window.addEventListener('component-highlighter:unregister', ((
-    event: CustomEvent
-  ) => {
-    const id = event.detail
-    componentRegistry.delete(id)
-    console.log(
-      '[component-highlighter] component unregistered via event:',
-      id,
-      'total:',
-      componentRegistry.size
-    )
-  }) as EventListener)
-
-  window.addEventListener('component-highlighter:update-props', ((
-    event: CustomEvent
-  ) => {
-    const { id, props, serializedProps } = event.detail
-    const instance = componentRegistry.get(id)
-    if (instance) {
-      instance.props = props
-      if (serializedProps) {
-        instance.serializedProps = serializedProps
-      }
-    }
-  }) as EventListener)
-}
-
 // Debounce function for performance
 function debounce(func: Function, wait: number) {
   let timeout: ReturnType<typeof setTimeout> | undefined
-  return (...args: any[]) => {
+  return (...args: unknown[]) => {
     if (timeout) clearTimeout(timeout)
     timeout = setTimeout(() => func.apply(null, args), wait)
   }
 }
 
-
 // Find component at pointer position
-// When Option is held, we don't need to find component at point for hovering
-// but we still need it for clicks
 function findComponentAtPoint(x: number, y: number): ComponentInstance | null {
   // When highlights are showing, we need to check what's under the pointer
   // accounting for the highlight layer
@@ -175,7 +125,6 @@ function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'Alt' && isDockActive && !isOptionHeld) {
     isOptionHeld = true
     setHighlightAll(true)
-    console.log('[component-highlighter] Option held - showing all highlights')
   }
 
   // Shift+H to toggle sticky highlight-all mode
@@ -183,17 +132,10 @@ function handleKeyDown(event: KeyboardEvent) {
     event.preventDefault()
     const currentState = isHighlightAllEnabled()
     setHighlightAll(!currentState)
-    console.log(
-      '[component-highlighter] highlight all toggled:',
-      !currentState,
-      'components:',
-      componentRegistry.size
-    )
   }
 
   // Escape to close selection
   if (event.key === 'Escape' && isDockActive && hasSelection()) {
-    console.log('[component-highlighter] Escape pressed, clearing selection')
     clearSelection()
   }
 }
@@ -204,12 +146,50 @@ function handleKeyUp(event: KeyboardEvent) {
     isOptionHeld = false
     // Only disable highlight-all if it wasn't toggled sticky with Shift+H
     setHighlightAll(false)
-    console.log('[component-highlighter] Option released - hiding non-hovered highlights')
   }
 }
 
-// Initialize event listeners
-if (typeof window !== 'undefined') {
+/**
+ * Initialize the component highlighter listeners
+ * This is called once when the module is loaded
+ */
+function initialize() {
+  // Prevent duplicate initialization if module is loaded multiple times
+  if (typeof window === 'undefined') return
+  if (window.__componentHighlighterInitialized) {
+    console.warn('[component-highlighter] Already initialized, skipping duplicate initialization')
+    return
+  }
+
+  // Mark as initialized
+  window.__componentHighlighterInitialized = true
+
+  // Set the registry reference for overlay module
+  setComponentRegistry(componentRegistry)
+
+  // Event listeners for registry synchronization
+  window.addEventListener('component-highlighter:register', ((event: CustomEvent) => {
+    const instance = event.detail
+    componentRegistry.set(instance.id, instance)
+  }) as EventListener)
+
+  window.addEventListener('component-highlighter:unregister', ((event: CustomEvent) => {
+    const id = event.detail
+    componentRegistry.delete(id)
+  }) as EventListener)
+
+  window.addEventListener('component-highlighter:update-props', ((event: CustomEvent) => {
+    const { id, props, serializedProps } = event.detail
+    const instance = componentRegistry.get(id)
+    if (instance) {
+      instance.props = props
+      if (serializedProps) {
+        instance.serializedProps = serializedProps
+      }
+    }
+  }) as EventListener)
+
+  // Initialize DOM event listeners
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('keyup', handleKeyUp)
@@ -225,60 +205,18 @@ if (typeof window !== 'undefined') {
     { passive: true }
   )
 
-  // Setup DevTools Kit RPC listeners with retry
-  const setupRPC = () => {
-    if (window.__vite_devtools_kit_rpc__) {
-      const rpc = window.__vite_devtools_kit_rpc__
-      console.log('[component-highlighter] RPC connected')
-
-      rpc.on('component-highlighter:create-story', (data: any) => {
-        // Dispatch custom event for external listeners
-        const event = new CustomEvent('create-story', {
-          detail: data,
-        })
-        window.dispatchEvent(event)
-        console.log('[component-highlighter] create-story dispatched', data)
-      })
-
-      rpc.on(
-        'component-highlighter:toggle-overlay',
-        (data: { enabled: boolean }) => {
-          console.log('[component-highlighter] toggle-overlay received', data)
-          if (data.enabled) {
-            enableHighlightMode()
-          } else {
-            disableHighlightMode()
-          }
-
-          // Reflect state back to dock UI
-          rpc.emit('component-highlighter:toggle-overlay', {
-            enabled: data.enabled,
-          })
-        }
-      )
-
-      // Send initial overlay state to dock UI (overlay is disabled by default)
-      rpc.emit('component-highlighter:toggle-overlay', { enabled: false })
-      console.log('[component-highlighter] initial state sent: disabled')
-    } else {
-      // Retry setup after a short delay
-      setTimeout(setupRPC, 100)
-    }
+  // Export for debugging
+  window.__componentHighlighterRegistry = componentRegistry
+  window.__componentHighlighterToggle = () => {
+    const currentState = isHighlightAllEnabled()
+    setHighlightAll(!currentState)
+    return !currentState
   }
-
-  setupRPC()
+  window.__componentHighlighterDraw = () => {
+    enableOverlay()
+    updateInstanceRects()
+  }
 }
 
-// Export for debugging
-if (typeof window !== 'undefined') {
-  ; (window as any).__componentHighlighterRegistry = componentRegistry
-    ; (window as any).__componentHighlighterToggle = () => {
-      const currentState = isHighlightAllEnabled()
-      setHighlightAll(!currentState)
-      return !currentState
-    }
-    ; (window as any).__componentHighlighterDraw = () => {
-      enableOverlay()
-      updateInstanceRects()
-    }
-}
+// Run initialization
+initialize()

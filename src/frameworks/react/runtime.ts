@@ -17,7 +17,7 @@ import React, { createElement, useEffect, useRef, useState } from 'react'
 import reactElementToJSXString from 'react-element-to-jsx-string/dist/esm/index.js'
 
 const DEBUG_MODE = ${options.debugMode ? 'true' : 'false'}
-const logDebug = (...args) => {
+globalThis.logDebug = (...args) => {
   if (DEBUG_MODE) {
     console.log('[component-highlighter]', ...args)
   }
@@ -257,15 +257,7 @@ export function registerInstance(meta, props, element) {
 }
 
 export function unregisterInstance(id) {
-  // Check if the DOM element is still in the document
-  const instance = componentRegistry.get(id)
-  if (instance && instance.element && instance.element.isConnected) {
-    // Element is still in DOM, don't unregister yet
-    logDebug('skipping unregistration for', id, '- element still in DOM')
-    return
-  }
-
-  // Element is not in DOM anymore, safe to unregister
+  // Always unregister when called - the cleanup function knows best
   componentRegistry.delete(id)
   logDebug('unregistered', { id, remaining: componentRegistry.size })
 
@@ -310,73 +302,86 @@ if (typeof window !== 'undefined') {
 // Component boundary that tracks position without DOM modification
 export const ComponentHighlighterBoundary = ({ meta, props, children }) => {
   const ref = useRef(null)
-  const [instanceId, setInstanceId] = useState(null)
+  // Track registration state with element reference to handle StrictMode and HMR correctly
+  const registrationRef = useRef({ id: null, element: null })
 
   useEffect(() => {
-    if (ref.current && !instanceId) {
-      // Find the actual DOM element with dimensions
-      let elementToTrack = ref.current
+    if (!ref.current) return
 
-      // If our wrapper span has no dimensions, find the first child with dimensions
-      if (elementToTrack.offsetWidth === 0 && elementToTrack.offsetHeight === 0) {
-        const walker = document.createTreeWalker(
-          elementToTrack,
-          NodeFilter.SHOW_ELEMENT,
-          {
-            acceptNode: (node) => {
-              const el = node
-              return el.offsetWidth > 0 && el.offsetHeight > 0
-                ? NodeFilter.FILTER_ACCEPT
-                : NodeFilter.FILTER_SKIP
-            },
-          }
-        )
-        const firstChild = walker.firstChild()
-        if (firstChild) {
-          elementToTrack = firstChild
+    // Find the actual DOM element with dimensions
+    let elementToTrack = ref.current
+
+    // If our wrapper span has no dimensions, find the first child with dimensions
+    if (elementToTrack.offsetWidth === 0 && elementToTrack.offsetHeight === 0) {
+      const walker = document.createTreeWalker(
+        elementToTrack,
+        NodeFilter.SHOW_ELEMENT,
+        {
+          acceptNode: (node) => {
+            const el = node
+            return el.offsetWidth > 0 && el.offsetHeight > 0
+              ? NodeFilter.FILTER_ACCEPT
+              : NodeFilter.FILTER_SKIP
+          },
         }
-      }
-
-      const id = registerInstance(meta, props, elementToTrack)
-      setInstanceId(id)
-
-      // Set up mutation observer to watch for DOM changes
-      const observer = new MutationObserver(() => {
-        // Update rect when DOM changes
-        const instance = componentRegistry.get(id)
-        if (instance && instance.element && instance.element.isConnected) {
-          instance.rect = instance.element.getBoundingClientRect()
-        }
-      })
-      observer.observe(elementToTrack, {
-        attributes: true,
-        childList: true,
-        subtree: true,
-        attributeFilter: ['style', 'class'],
-      })
-
-      // Set up resize observer to watch for size changes
-      const resizeObserver = new ResizeObserver(() => {
-        const instance = componentRegistry.get(id)
-        if (instance && instance.element && instance.element.isConnected) {
-          instance.rect = instance.element.getBoundingClientRect()
-        }
-      })
-      resizeObserver.observe(elementToTrack)
-
-      return () => {
-        observer.disconnect()
-        resizeObserver.disconnect()
-        unregisterInstance(id)
+      )
+      const firstChild = walker.firstChild()
+      if (firstChild) {
+        elementToTrack = firstChild
       }
     }
-  }, [meta, props, instanceId])
+
+    // Check if we're already registered with the SAME element (StrictMode remount)
+    // If element changed (HMR), we need to re-register
+    if (registrationRef.current.id && registrationRef.current.element === elementToTrack) {
+      logDebug('skipping registration - same element already registered')
+      return
+    }
+
+    // If we had a previous registration with different element, unregister it
+    if (registrationRef.current.id) {
+      unregisterInstance(registrationRef.current.id)
+    }
+
+    const id = registerInstance(meta, props, elementToTrack)
+    registrationRef.current = { id, element: elementToTrack }
+
+    // Set up mutation observer to watch for DOM changes
+    const observer = new MutationObserver(() => {
+      const instance = componentRegistry.get(id)
+      if (instance && instance.element && instance.element.isConnected) {
+        instance.rect = instance.element.getBoundingClientRect()
+      }
+    })
+    observer.observe(elementToTrack, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+      attributeFilter: ['style', 'class'],
+    })
+
+    // Set up resize observer to watch for size changes
+    const resizeObserver = new ResizeObserver(() => {
+      const instance = componentRegistry.get(id)
+      if (instance && instance.element && instance.element.isConnected) {
+        instance.rect = instance.element.getBoundingClientRect()
+      }
+    })
+    resizeObserver.observe(elementToTrack)
+
+    return () => {
+      observer.disconnect()
+      resizeObserver.disconnect()
+      unregisterInstance(id)
+      registrationRef.current = { id: null, element: null }
+    }
+  }, [meta])
 
   useEffect(() => {
-    if (instanceId) {
-      updateInstanceProps(instanceId, props)
+    if (registrationRef.current.id) {
+      updateInstanceProps(registrationRef.current.id, props)
     }
-  }, [instanceId, props])
+  }, [props])
 
   return React.createElement('span', { ref, style: { display: 'contents' } }, children)
 }
