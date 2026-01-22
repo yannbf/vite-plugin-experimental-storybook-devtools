@@ -63,6 +63,7 @@ export const transform: TransformFunction = (code: string, id: string): string |
       isMemo: boolean
       isForwardRef: boolean
     }> = []
+    const exportedNames = new Set<string>()
 
     // Check if file contains JSX and collect component exports
     traverse(ast, {
@@ -81,46 +82,28 @@ export const transform: TransformFunction = (code: string, id: string): string |
           hasReactImport = true
         }
       },
-      FunctionDeclaration(path) {
-        if (isComponentFunction(path.node) && path.parent.type === 'Program') {
-          componentsToWrap.push({
-            name: path.node.id?.name || 'AnonymousFunction',
-            node: path.node,
-            isDefaultExport: false,
-            isMemo: false,
-            isForwardRef: false,
-          })
-        }
-      },
-      VariableDeclaration(path) {
-        if (path.parent.type === 'Program') {
-          path.node.declarations.forEach((decl) => {
-            if (isComponentVariable(decl)) {
-              const name = getVariableName(decl)
-              const isMemo = isMemoWrapper(decl.init)
-              const isForwardRef = isForwardRefWrapper(decl.init)
-
-              componentsToWrap.push({
-                name,
-                node: decl,
-                isDefaultExport: false,
-                isMemo,
-                isForwardRef,
-              })
-            }
-          })
-        }
-      },
       ExportDefaultDeclaration(path) {
         const { declaration } = path.node
 
         if (isComponentDeclaration(declaration)) {
-          const name = getDeclarationName(declaration) || 'DefaultExport'
-          const isMemo =
-            declaration.type === 'CallExpression' && isMemoWrapper(declaration)
-          const isForwardRef =
-            declaration.type === 'CallExpression' &&
-            isForwardRefWrapper(declaration)
+          let name = getDeclarationName(declaration) || 'DefaultExport'
+          let isMemo = false
+          let isForwardRef = false
+
+          // Special handling for default export of identifier (e.g., export default Button)
+          if (declaration.type === 'Identifier') {
+            name = declaration.name
+            // Mark as exported for later collection of the variable declaration
+            exportedNames.add(name)
+            // Don't add the export node to componentsToWrap - the variable will be wrapped instead
+            return
+          } else {
+            isMemo =
+              declaration.type === 'CallExpression' && isMemoWrapper(declaration)
+            isForwardRef =
+              declaration.type === 'CallExpression' &&
+              isForwardRefWrapper(declaration)
+          }
 
           componentsToWrap.push({
             name,
@@ -132,6 +115,7 @@ export const transform: TransformFunction = (code: string, id: string): string |
         }
       },
       ExportNamedDeclaration(path) {
+        // Handle export declarations like "export function Component() {}" or "export const Component = () => {}"
         if (path.node.declaration) {
           const { declaration } = path.node
 
@@ -139,8 +123,10 @@ export const transform: TransformFunction = (code: string, id: string): string |
             declaration.type === 'FunctionDeclaration' &&
             isComponentFunction(declaration)
           ) {
+            const name = declaration.id?.name || 'ExportedFunction'
+            exportedNames.add(name)
             componentsToWrap.push({
-              name: declaration.id?.name || 'ExportedFunction',
+              name,
               node: path.node,
               isDefaultExport: false,
               isMemo: false,
@@ -150,6 +136,7 @@ export const transform: TransformFunction = (code: string, id: string): string |
             declaration.declarations.forEach((decl) => {
               if (isComponentVariable(decl)) {
                 const name = getVariableName(decl)
+                exportedNames.add(name)
                 const isMemo = isMemoWrapper(decl.init)
                 const isForwardRef = isForwardRefWrapper(decl.init)
 
@@ -163,6 +150,52 @@ export const transform: TransformFunction = (code: string, id: string): string |
               }
             })
           }
+        } else if (path.node.specifiers) {
+          // Handle export specifiers like "export { Component }" or "export { Component as C }"
+          path.node.specifiers.forEach((specifier) => {
+            if (specifier.type === 'ExportSpecifier') {
+              exportedNames.add(specifier.exported.name)
+            }
+          })
+        }
+      },
+    })
+
+    // Second pass: collect top-level component declarations that are exported
+    traverse(ast, {
+      FunctionDeclaration(path) {
+        if (path.parent.type === 'Program' && isComponentFunction(path.node)) {
+          const name = path.node.id?.name
+          if (name && exportedNames.has(name)) {
+            componentsToWrap.push({
+              name,
+              node: path.node,
+              isDefaultExport: false,
+              isMemo: false,
+              isForwardRef: false,
+            })
+          }
+        }
+      },
+      VariableDeclaration(path) {
+        if (path.parent.type === 'Program') {
+          path.node.declarations.forEach((decl) => {
+            if (isComponentVariable(decl)) {
+              const name = getVariableName(decl)
+              if (exportedNames.has(name)) {
+                const isMemo = isMemoWrapper(decl.init)
+                const isForwardRef = isForwardRefWrapper(decl.init)
+
+                componentsToWrap.push({
+                  name,
+                  node: decl,
+                  isDefaultExport: false,
+                  isMemo,
+                  isForwardRef,
+                })
+              }
+            }
+          })
         }
       },
     })

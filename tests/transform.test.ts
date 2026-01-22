@@ -291,6 +291,36 @@ export function Button() {
     })
   })
 
+  describe('non-exported components', () => {
+    it('should not wrap non-exported components', () => {
+      const code = `
+import React from 'react'
+
+const ThemeToggle = () => {
+  return (
+    <button>
+      <span>Theme</span>
+    </button>
+  )
+}
+
+export const Header = ({ sticky }: { sticky?: boolean }) => {
+  return (
+    <span>Header component <ThemeToggle /></span>
+  )
+}
+`
+
+      const result = transform(code, '/src/Test.tsx')
+
+      expect(result).toBeDefined()
+      // Should wrap exported Header component
+      expect(result).toContain('Header = withComponentHighlighter')
+      // Should NOT wrap non-exported ThemeToggle component
+      expect(result).not.toContain('ThemeToggle = withComponentHighlighter')
+    })
+  })
+
   describe('edge cases', () => {
     it('should handle components with complex JSX', () => {
       const code = `
