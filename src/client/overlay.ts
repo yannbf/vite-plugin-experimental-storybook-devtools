@@ -648,7 +648,7 @@ export function showHoverMenu(
     ? `<span style="display: flex; align-items: center;">${STORYBOOK_ICON_SVG.replace('width="16" height="16"', 'width="14" height="14"')}</span>`
     : ''
 
-  hoverMenuElement.innerHTML = `${iconHtml}<span>&lt;${meta.componentName}&gt;</span>`
+  hoverMenuElement.innerHTML = `${iconHtml}<span style="color: white">&lt;${meta.componentName}&gt;</span>`
   document.body.appendChild(hoverMenuElement)
 }
 
