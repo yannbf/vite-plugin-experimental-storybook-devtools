@@ -37,11 +37,9 @@
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "release": "bumpp && pnpm publish",
-    "prepublishOnly": "pnpm run build"
-  },
-  "peerDependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "prepublishOnly": "pnpm run build",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "devDependencies": {
     "@babel/parser": "^7.28.6",
@@ -61,7 +59,18 @@
     "typescript": "^5.9.3",
     "vite": "^8.0.0-beta.7",
     "vitest": "^4.0.16",
-    "vitest-browser-react": "^2.0.2"
+    "vitest-browser-react": "^2.0.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "storybook": "10.3.0-alpha.0",
+    "@storybook/react-vite": "10.3.0-alpha.0",
+    "@chromatic-com/storybook": "^5.0.0",
+    "@storybook/addon-vitest": "10.3.0-alpha.0",
+    "@storybook/addon-a11y": "10.3.0-alpha.0",
+    "@storybook/addon-docs": "10.3.0-alpha.0",
+    "@storybook/addon-onboarding": "10.3.0-alpha.0",
+    "playwright": "^1.57.0",
+    "@vitest/coverage-v8": "4.0.17"
   },
   "dependencies": {
     "@babel/generator": "^7.28.6",

@@ -39,7 +39,7 @@ const tasks: Task[] = [
 
 export function App() {
   return (
-    <>
+    <div>
       {/* Header: simple component with no children */}
       <Header title="TaskFlow" userName="John Doe" />
 
@@ -86,8 +86,10 @@ export function App() {
               onAction={() => alert(`Viewing: ${task.title}`)}
             />
           ))}
+
+          <Button variant="secondary">MORE STUFF! NICE STUFF VALENTIN DO YOU THINK?</Button>
         </TaskList>
       </main>
-    </>
+    </div>
   )
 }

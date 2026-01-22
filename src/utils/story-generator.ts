@@ -662,7 +662,7 @@ export function generateStoryName(props: SerializedProps): string {
     }
   }
 
-  return 'Snapshot'
+  return 'Default'
 }
 
 function capitalizeFirst(str: string): string {
