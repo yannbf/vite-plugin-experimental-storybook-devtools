@@ -1,22 +1,93 @@
-import React, { useEffect } from 'react'
-import { MyButton } from './components/Button'
-import { WithChildren } from './WithChildren'
-import { Emoji } from './Emoji'
+import React from 'react'
+import { Header } from './components/Header'
+import { Button } from './components/Button'
+import { TaskCard, type Task } from './components/TaskCard'
+import { TaskList } from './components/TaskList'
+
+const tasks: Task[] = [
+  {
+    id: '1',
+    title: 'Review component highlighter PR',
+    status: 'in-progress',
+    metadata: {
+      priority: 'high',
+      dueDate: 'Today',
+      assignee: { name: 'Alice' },
+    },
+  },
+  {
+    id: '2',
+    title: 'Write documentation for new features',
+    status: 'pending',
+    metadata: {
+      priority: 'medium',
+      dueDate: 'Tomorrow',
+      assignee: { name: 'Bob' },
+    },
+  },
+  {
+    id: '3',
+    title: 'Update dependencies to latest versions',
+    status: 'completed',
+    metadata: {
+      priority: 'low',
+      dueDate: 'Yesterday',
+      assignee: { name: 'Charlie' },
+    },
+  },
+]
 
 export function App() {
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <div style={{ marginTop: '20px' }}>
-        <MyButton variant="primary">Primary</MyButton>
-      </div>
+    <>
+      {/* Header: simple component with no children */}
+      <Header title="TaskFlow" userName="John Doe" />
 
-      <h2>Some non-component Heading</h2>
-      <MyButton variant="secondary" size="small">With JSX emoji <Emoji onClick={() => alert('Snap!')} /></MyButton>
+      <main className="dashboard">
+        <div className="dashboard-header">
+          <div>
+            <h1 className="dashboard-title">My Tasks</h1>
+            <p className="dashboard-subtitle">
+              Track and manage your work
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {/* Buttons: primary and secondary variants */}
+            <Button variant="secondary">Filter</Button>
+            <Button variant="primary" onClick={() => alert('New task!')}>
+              + New Task
+            </Button>
+          </div>
+        </div>
 
-      <WithChildren label="Other" mode="primary" deepObject={{ value: 'test', nested: { value: 'nested' } }}>
-        With children!
-        <MyButton size="small">Small button</MyButton>
-      </WithChildren>
-    </div>
+        {/* Non-component content */}
+        <div className="stats-row">
+          <div className="stat-card">
+            <div className="stat-value">3</div>
+            <div className="stat-label">Total Tasks</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">1</div>
+            <div className="stat-label">In Progress</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">1</div>
+            <div className="stat-label">Completed</div>
+          </div>
+        </div>
+
+        {/* TaskList: component with children */}
+        <TaskList title="All Tasks" count={tasks.length}>
+          {/* TaskCard: component with deep object props */}
+          {tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onAction={() => alert(`Viewing: ${task.title}`)}
+            />
+          ))}
+        </TaskList>
+      </main>
+    </>
   )
 }

@@ -1,14 +1,29 @@
 import React from 'react'
-import { useState } from 'react'
 
-interface MyButtonProps { variant?: 'primary' | 'secondary', size?: 'small' | 'medium' | 'large', children: React.ReactNode }
+export interface ButtonProps {
+  variant?: 'primary' | 'secondary'
+  size?: 'default' | 'small'
+  onClick?: () => void
+  children: React.ReactNode
+}
 
-export const MyButton: React.FC<MyButtonProps> = ({ variant = 'primary', size = 'medium', children }: MyButtonProps) => {
-  const [count, setCount] = useState(0)
-  console.log('MyButton rendered')
+export function Button({
+  variant = 'primary',
+  size = 'default',
+  onClick,
+  children,
+}: ButtonProps) {
+  const className = [
+    'btn',
+    `btn-${variant}`,
+    size === 'small' && 'btn-small',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <button className="my-button" style={{ fontSize: size === 'small' ? '12px' : size === 'medium' ? '16px' : '20px', backgroundColor: variant === 'secondary' ? 'gray' : 'blue' }} onClick={() => setCount(count + 1)}>
-      {children} {count > 0 && `(clicked ${count} times)`}
+    <button className={className} onClick={onClick}>
+      {children}
     </button>
   )
 }
