@@ -751,15 +751,15 @@ function updateDebugOverlay() {
     <div style="display: grid; gap: 4px;">
       <div style="display: flex; justify-content: space-between;">
         <span style="color: #9ca3af;">Total instances:</span>
-        <span style="font-weight: 500;">${totalComponents}</span>
+        <span style="font-weight: 500; color: white;">${totalComponents}</span>
       </div>
       <div style="display: flex; justify-content: space-between;">
         <span style="color: #9ca3af;">Unique components:</span>
-        <span style="font-weight: 500;">${uniqueCount}</span>
+        <span style="font-weight: 500; color: white;">${uniqueCount}</span>
       </div>
       <div style="display: flex; justify-content: space-between;">
         <span style="color: #9ca3af;">With stories:</span>
-        <span style="font-weight: 500;">${withStoriesCount}</span>
+        <span style="font-weight: 500; color: white;">${withStoriesCount}</span>
       </div>
       <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.1);">
         <span style="color: #9ca3af;">Coverage:</span>
