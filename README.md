@@ -19,11 +19,11 @@ A Vite plugin that instruments React components to provide visual highlighting a
 ## 📦 Installation
 
 ```bash
-npm install vite-plugin-component-highlighter
+npm install vite-plugin-experimental-storybook-devtools
 # or
-pnpm add vite-plugin-component-highlighter
+pnpm add vite-plugin-experimental-storybook-devtools
 # or
-yarn add vite-plugin-component-highlighter
+yarn add vite-plugin-experimental-storybook-devtools
 ```
 
 ### Peer Dependencies
@@ -42,7 +42,7 @@ This plugin requires:
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { DevTools } from '@vitejs/devtools'
-import componentHighlighter from 'vite-plugin-component-highlighter/react'
+import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/react'
 
 export default defineConfig({
   plugins: [
@@ -216,8 +216,8 @@ For detailed technical documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/vite-plugin-component-highlighter.git
-cd vite-plugin-component-highlighter
+git clone https://github.com/your-org/vite-plugin-experimental-storybook-devtools.git
+cd vite-plugin-experimental-storybook-devtools
 
 # Install dependencies
 pnpm install

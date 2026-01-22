@@ -10,73 +10,73 @@ This plugin instruments component-based applications at build-time to enable run
 **Import from a framework-specific path:**
 ```typescript
 // For React
-import componentHighlighter from 'vite-plugin-component-highlighter/react'
+import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/react'
 
 // Future frameworks will follow the same pattern:
-// import componentHighlighter from 'vite-plugin-component-highlighter/vue'
-// import componentHighlighter from 'vite-plugin-component-highlighter/svelte'
+// import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/vue'
+// import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/svelte'
 ```
 
 ## High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              VITE BUILD PIPELINE                             │
+│                              VITE BUILD PIPELINE                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────────┐   │
 │  │   User's JSX/TSX │───▶│   transform.ts   │───▶│  Instrumented Code   │   │
 │  │   Components     │    │   (Babel AST)    │    │  with HOC wrapper    │   │
 │  └──────────────────┘    └──────────────────┘    └──────────────────────┘   │
-│                                                                              │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              BROWSER RUNTIME                                 │
+│                              BROWSER RUNTIME                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────────┐   │
 │  │  virtual-module  │    │   listeners.ts   │    │     overlay.ts       │   │
 │  │  (HOC runtime)   │───▶│  (event mgmt)    │───▶│   (UI rendering)     │   │
 │  └──────────────────┘    └──────────────────┘    └──────────────────────┘   │
-│         │                                                   │                │
-│         ▼                                                   ▼                │
+│         │                                                   │               │
+│         ▼                                                   ▼               │
 │  ┌──────────────────┐                          ┌──────────────────────┐     │
-│  │ Component        │                          │  Context Menu UI      │     │
-│  │ Registry (Map)   │                          │  - Props display      │     │
-│  │ - meta           │                          │  - Story name input   │     │
-│  │ - props          │                          │  - Create/Add Story   │     │
-│  │ - element ref    │                          │  - Open Component     │     │
-│  └──────────────────┘                          │  - Open Stories       │     │
-│                                                 └──────────────────────┘     │
+│  │ Component        │                          │  Context Menu UI     │     │
+│  │ Registry (Map)   │                          │  - Props display     │     │
+│  │ - meta           │                          │  - Story name input  │     │
+│  │ - props          │                          │  - Create/Add Story  │     │
+│  │ - element ref    │                          │  - Open Component    │     │
+│  └──────────────────┘                          │  - Open Stories      │     │
+│                                                └──────────────────────┘     │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         VITE DEVTOOLS DOCK (iframe)                          │
+│                         VITE DEVTOOLS DOCK (iframe)                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  ┌──────────────────┐         RPC          ┌──────────────────────────┐     │
 │  │ vite-devtools.ts │◀────────────────────▶│ component-highlighter-   │     │
 │  │ (Dock UI client) │                      │ plugin.ts (Server)       │     │
 │  └──────────────────┘                      └──────────────────────────┘     │
-│                                                        │                     │
-│                                                        ▼                     │
-│                                             ┌──────────────────────────┐     │
-│                                             │   story-generator.ts     │     │
-│                                             │   - Generate .stories.tsx│     │
-│                                             │   - Handle JSX props     │     │
-│                                             │   - Resolve imports      │     │
-│                                             └──────────────────────────┘     │
-│                                                        │                     │
-│                                                        ▼                     │
-│                                             ┌──────────────────────────┐     │
-│                                             │   File System            │     │
-│                                             │   - Write story files    │     │
-│                                             │   - Append to existing   │     │
-│                                             └──────────────────────────┘     │
-│                                                                              │
+│                                                        │                    │
+│                                                        ▼                    │
+│                                             ┌──────────────────────────┐    │
+│                                             │   story-generator.ts     │    │
+│                                             │   - Generate .stories.tsx│    │
+│                                             │   - Handle JSX props     │    │
+│                                             │   - Resolve imports      │    │
+│                                             └──────────────────────────┘    │
+│                                                        │                    │
+│                                                        ▼                    │
+│                                             ┌──────────────────────────┐    │
+│                                             │   File System            │    │
+│                                             │   - Write story files    │    │
+│                                             │   - Append to existing   │    │
+│                                             └──────────────────────────┘    │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,7 +92,7 @@ import componentHighlighter from 'vite-plugin-component-highlighter/react'
 - Register RPC handlers for client-server communication
 - Handle `/__component-highlighter/check-story` endpoint
 - Handle `/__open-in-editor` endpoint
-- Invoke `story-generator.ts` to create story files
+- Invoke `utils/story-generator.ts` to create story files
 - Send WebSocket notifications on story creation
 
 **RPC Methods**:
@@ -102,8 +102,6 @@ import componentHighlighter from 'vite-plugin-component-highlighter/react'
 ### 2. `frameworks/react/transform.ts` (Build-Time)
 
 **Purpose**: Babel-based AST transformation that instruments React components with the HOC wrapper.
-
-> **Note**: `src/transform.ts` re-exports from this module for backward compatibility.
 
 **Key Responsibilities**:
 - Parse JSX/TSX files using Babel
@@ -138,8 +136,6 @@ export const MyButton = withComponentHighlighter(
 ### 3. `frameworks/react/runtime.ts` (Runtime)
 
 **Purpose**: Runtime code injected into the browser. Contains the HOC implementation and prop serialization logic.
-
-> **Note**: `src/virtual-module.ts` re-exports types from this module for backward compatibility.
 
 **Key Responsibilities**:
 - Implement `withComponentHighlighter` HOC
@@ -208,7 +204,7 @@ interface ComponentInstance {
 - Handle story creation success/failure feedback
 - Listen for `component-highlighter:story-created` WebSocket events
 
-### 7. `story-generator.ts` (Server-Side)
+### 7. `utils/story-generator.ts` (Server-Side)
 
 **Purpose**: Generate Storybook `.stories.tsx` file content.
 
@@ -246,7 +242,7 @@ export const Primary: Story = {
 };
 ```
 
-### 8. `provider-analyzer.ts` (Server-Side, Standalone)
+### 8. `utils/provider-analyzer.ts` (Server-Side, Standalone)
 
 **Purpose**: Analyze app entry points to detect provider dependencies for Storybook decorator setup.
 
@@ -277,7 +273,7 @@ export const Primary: Story = {
 4. overlay.ts emits 'log-info' event with serialized data
 5. vite-devtools.ts receives event, calls RPC
 6. component-highlighter-plugin.ts receives RPC call
-7. story-generator.ts generates story content
+7. utils/story-generator.ts generates story content
 8. Plugin writes file to disk
 9. Plugin sends WebSocket notification
 10. vite-devtools.ts shows success feedback
@@ -338,10 +334,7 @@ interface DetectedProvider {
 ```
 src/
 ├── index.ts                      # Core exports (types, utilities)
-├── react.ts                      # React entry point: import from '/react'
-├── component-highlighter-plugin.ts # Plugin factory (createComponentHighlighterPlugin)
-├── story-generator.ts            # Story file generation
-├── provider-analyzer.ts          # Provider dependency detection
+├── create-component-highlighter-plugin.ts # Plugin factory (createComponentHighlighterPlugin)
 ├── storybook-icon.svg            # Icon for DevTools dock
 │
 ├── frameworks/                   # Multi-framework support
@@ -349,13 +342,18 @@ src/
 │   ├── index.ts                  # Type exports only
 │   └── react/                    # React-specific implementation
 │       ├── index.ts              # React framework config
+│       ├── plugin.ts             # React entry point: import from '/react'
 │       ├── transform.ts          # Babel AST transformation
 │       └── runtime.ts            # HOC and serialization runtime
 │
-└── client/                       # Framework-agnostic client code
-    ├── overlay.ts                # UI overlay and context menu
-    ├── listeners.ts              # Event handlers and registry
-    └── vite-devtools.ts          # DevTools dock client
+├── client/                       # Framework-agnostic client code
+│   ├── overlay.ts                # UI overlay and context menu
+│   ├── listeners.ts              # Event handlers and registry
+│   └── vite-devtools.ts          # DevTools dock client
+│
+└── utils/                        # Utility functions
+    ├── story-generator.ts        # Story file generation
+    └── provider-analyzer.ts      # Provider dependency detection
 
 tests/
 ├── transform.test.ts             # Unit tests for transform
@@ -374,34 +372,34 @@ The codebase is structured for multi-framework support:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Framework Abstraction                        │
+│                         Framework Abstraction                       │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
+│                                                                     │
 │  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                    frameworks/types.ts                          │ │
+│  │                    frameworks/types.ts                         │ │
 │  │  - ComponentMeta, ComponentInstance, SerializedProps           │ │
 │  │  - FrameworkConfig, TransformFunction, VirtualModuleSetup      │ │
 │  └────────────────────────────────────────────────────────────────┘ │
-│                                 │                                    │
-│                                 ▼                                    │
+│                                 │                                   │
+│                                 ▼                                   │
 │  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                    frameworks/index.ts                          │ │
+│  │                    frameworks/index.ts                         │ │
 │  │  - Framework registry (Map<name, FrameworkConfig>)             │ │
 │  │  - detectFramework(code, id) → FrameworkConfig                 │ │
 │  │  - getFramework(name) → FrameworkConfig                        │ │
 │  └────────────────────────────────────────────────────────────────┘ │
-│                                 │                                    │
+│                                 │                                   │
 │         ┌───────────────────────┼───────────────────────┐           │
 │         ▼                       ▼                       ▼           │
-│  ┌──────────────┐       ┌──────────────┐       ┌──────────────┐    │
-│  │    React     │       │     Vue      │       │   Svelte     │    │
-│  │  (current)   │       │   (future)   │       │   (future)   │    │
-│  ├──────────────┤       ├──────────────┤       ├──────────────┤    │
-│  │ transform.ts │       │ transform.ts │       │ transform.ts │    │
-│  │ runtime.ts   │       │ runtime.ts   │       │ runtime.ts   │    │
-│  │ index.ts     │       │ index.ts     │       │ index.ts     │    │
-│  └──────────────┘       └──────────────┘       └──────────────┘    │
-│                                                                      │
+│  ┌──────────────┐       ┌──────────────┐       ┌──────────────┐     │
+│  │    React     │       │     Vue      │       │   Svelte     │     │
+│  │  (current)   │       │   (future)   │       │   (future)   │     │
+│  ├──────────────┤       ├──────────────┤       ├──────────────┤     │
+│  │ transform.ts │       │ transform.ts │       │ transform.ts │     │
+│  │ runtime.ts   │       │ runtime.ts   │       │ runtime.ts   │     │
+│  │ index.ts     │       │ index.ts     │       │ index.ts     │     │
+│  └──────────────┘       └──────────────┘       └──────────────┘     │
+│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -424,11 +422,11 @@ interface FrameworkConfig {
 2. Implement `transform.ts` with Vue-specific AST transformation
 3. Implement `runtime.ts` with Vue-specific wrapper runtime
 4. Create `index.ts` exporting a `FrameworkConfig`
-5. Create `src/vue.ts` as the entry point:
+5. Create `plugin.ts` as the entry point:
    ```typescript
-   import { createComponentHighlighterPlugin } from './component-highlighter-plugin'
-   import { vueFramework } from './frameworks/vue'
-   
+   import { createComponentHighlighterPlugin } from '../../create-component-highlighter-plugin'
+   import { vueFramework } from '.'
+
    export default function componentHighlighterVue(options = {}) {
      return createComponentHighlighterPlugin(vueFramework, options)
    }
@@ -451,15 +449,15 @@ interface PluginOptions {
 ## Extension Points
 
 ### Adding New Provider Detection
-1. Add pattern to `PROVIDER_PATTERNS` in `provider-analyzer.ts`
+1. Add pattern to `PROVIDER_PATTERNS` in `utils/provider-analyzer.ts`
 2. Include packages, hooks, components, decorator suggestion, and docs URL
 
 ### Adding New Prop Serialization
-1. Modify `serializeValue()` in `virtual-module.ts`
-2. Add corresponding handling in `formatPropValue()` in `story-generator.ts`
+1. Modify `serializeValue()` in `frameworks/react/runtime.ts`
+2. Add corresponding handling in `formatPropValue()` in `utils/story-generator.ts`
 
 ### Customizing Story Generation
-1. Modify `generateStoryContent()` in `story-generator.ts`
+1. Modify `generateStoryContent()` in `utils/story-generator.ts`
 2. Update imports, meta structure, or story format as needed
 
 ---
@@ -477,7 +475,7 @@ interface PluginOptions {
 1. Create `transform-vue.ts` using `@vue/compiler-sfc`
 2. Parse `<script>` and `<script setup>` blocks
 3. Wrap component export with Vue-compatible HOC or use provide/inject
-4. Modify `virtual-module.ts` to support Vue's reactivity system
+4. Modify Vue-specific runtime to support Vue's reactivity system
 5. Generate `.stories.ts` for Vue components
 
 **Key Differences**:
