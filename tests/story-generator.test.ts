@@ -96,6 +96,16 @@ describe('generateStory', () => {
 
       expect(result.content).toContain('export const MyCoolStory: Story')
     })
+
+    it('should use Default for invalid story names starting with numbers', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {},
+        storyName: '#2C2C2C',
+      })
+
+      expect(result.content).toContain('export const Default: Story')
+    })
   })
 
   describe('props serialization', () => {
@@ -557,6 +567,12 @@ describe('generateStoryName', () => {
 
   it('should return Snapshot for non-meaningful props', () => {
     expect(generateStoryName({ children: 'text', className: 'btn' })).toBe('Snapshot')
+  })
+
+  it('should handle invalid prop values that result in invalid identifiers', () => {
+    // This would generate an invalid name, but generateStoryName only looks for specific props
+    // The invalid name handling is tested in the story generation tests above
+    expect(generateStoryName({ variant: '123invalid' })).toBe('123invalid')
   })
 })
 

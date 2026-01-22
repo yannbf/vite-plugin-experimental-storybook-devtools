@@ -118,12 +118,18 @@ export function generateStory(data: StoryGenerationData): GeneratedStory {
  */
 function toValidStoryName(name: string): string {
   // Remove invalid characters and convert to PascalCase
-  return name
+  let validName = name
     .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special chars
     .split(/\s+/) // Split by whitespace
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('')
-    || 'Default'
+
+  // If empty or starts with a digit, it's invalid
+  if (!validName || /^\d/.test(validName)) {
+    return 'Default'
+  }
+
+  return validName
 }
 
 /**
