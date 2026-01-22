@@ -87,7 +87,7 @@ export function App() {
             />
           ))}
 
-          <Button variant="secondary">MORE STUFF! NICE STUFF VALENTIN DO YOU THINK?</Button>
+          <Button variant="secondary" onClick={() => alert('Load more!')}>Load more</Button>
         </TaskList>
       </main>
     </div>

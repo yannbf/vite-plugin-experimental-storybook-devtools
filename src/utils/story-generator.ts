@@ -205,9 +205,10 @@ function appendStoryToExisting(options: {
 
   // Generate the new story export
   const argsContent = generateArgsContent(props, 1)
+  const hasArgs = Object.keys(props).length > 0
   const newStory = `
-export const ${finalStoryName}: Story = {
-  args: ${argsContent},
+export const ${finalStoryName}: Story = {${hasArgs ? `\n  args: ${argsContent},` : ''
+    }
 };
 `
 
@@ -312,6 +313,23 @@ function hasAnyFunctionProps(props: SerializedProps): boolean {
     }
     if (typeof value === 'object' && value !== null && !isJSXSerializedValue(value)) {
       if (hasAnyFunctionProps(value as SerializedProps)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Check if props contain any JSX serialized values
+ */
+function hasAnyJSXProps(props: SerializedProps): boolean {
+  for (const value of Object.values(props)) {
+    if (isJSXSerializedValue(value)) {
+      return true
+    }
+    if (typeof value === 'object' && value !== null && !isJSXSerializedValue(value)) {
+      if (hasAnyJSXProps(value as SerializedProps)) {
         return true
       }
     }
@@ -510,12 +528,13 @@ function generateStoryContent(options: {
 }): string {
   const { componentName, imports, props, storyName } = options
 
-  // Check if we need to import fn from storybook/test
+  // Check if we need imports
   const needsFnImport = hasAnyFunctionProps(props)
+  const needsReactImport = hasAnyJSXProps(props)
 
   // Build import statements
   const importStatements = [
-    `import React from 'react';`,
+    ...(needsReactImport ? [`import React from 'react';`] : []),
     `import type { Meta, StoryObj } from '@storybook/react-vite';`,
     ...(needsFnImport ? [`import { fn } from 'storybook/test';`] : []),
     ...imports.map((imp) => `import ${imp.name} from '${imp.path}';`),
@@ -525,6 +544,8 @@ function generateStoryContent(options: {
   const argsContent = generateArgsContent(props, 1)
 
   // Build the story file
+  const hasArgs = Object.keys(props).length > 0
+
   return `${importStatements}
 
 const meta: Meta<typeof ${componentName}> = {
@@ -534,8 +555,8 @@ const meta: Meta<typeof ${componentName}> = {
 export default meta;
 type Story = StoryObj<typeof ${componentName}>;
 
-export const ${storyName}: Story = {
-  args: ${argsContent},
+export const ${storyName}: Story = {${hasArgs ? `\n  args: ${argsContent},` : ''
+    }
 };
 `
 }
