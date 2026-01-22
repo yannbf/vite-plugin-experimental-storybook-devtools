@@ -276,6 +276,10 @@ function drawAllHighlights() {
   for (const instance of instances) {
     if (!instance.rect) continue
 
+    // Use cached story info (synchronous) - defaults to false if not cached yet
+    const storyInfo = storyFileCache.get(instance.meta.filePath)
+    const hasStory = storyInfo?.hasStory ?? false
+
     let shouldShow = false
     let type: 'hovered' | 'sameType' | 'other' | 'selected' = 'other'
 
@@ -287,12 +291,11 @@ function drawAllHighlights() {
       shouldShow = true
     } else if (isHighlightAllActive) {
       // When highlighting all with Option held
-      if (highlightComponentName && instance.meta.componentName === highlightComponentName) {
-        // Same type as hovered - show as sameType (pink dashed)
-        type = 'sameType'
+      // Components with stories: pink, components without stories: blue
+      if (hasStory) {
+        type = 'hovered' // Pink stroke and background
       } else {
-        // Other components - show as blue
-        type = 'other'
+        type = 'other' // Blue stroke and background
       }
       shouldShow = true
     } else if (
@@ -320,10 +323,6 @@ function drawAllHighlights() {
         highlightElements.set(instance.id, el)
         highlightContainer!.appendChild(el)
       }
-
-      // Use cached story info (synchronous) - defaults to false if not cached yet
-      const storyInfo = storyFileCache.get(instance.meta.filePath)
-      const hasStory = storyInfo?.hasStory ?? false
 
       updateHighlightElement(el, instance, type, hasStory)
     }
@@ -386,6 +385,7 @@ async function showContextMenu(instance: ComponentInstance, x: number, y: number
     max-width: 420px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
+    cursor: default;
   `
 
   // Use serialized props for display if available, otherwise fall back to raw props
@@ -445,12 +445,12 @@ async function showContextMenu(instance: ComponentInstance, x: number, y: number
       <div style="color: #6b7280; font-size: 11px; margin-bottom: 10px; word-break: break-all;">${relativePath}</div>
       ${openButtonsHtml}
       <div style="margin-bottom: 8px;">
-        <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">Props:</div>
+        <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px; color: #374151;">Props:</div>
         <div style="max-height: 120px; overflow-y: auto;">${propsHtml || '<span style="color: #9ca3af;">none</span>'}</div>
       </div>
       <div style="border-top: 1px solid #e5e7eb; padding-top: 10px; margin-top: 10px;">
         <div style="margin-bottom: 8px;">
-          <label style="font-weight: bold; display: block; margin-bottom: 4px; font-size: 12px;">Story Name:</label>
+          <label style="font-weight: bold; display: block; margin-bottom: 4px; font-size: 12px; color: #374151;">Story Name:</label>
           <input 
             id="story-name-input" 
             type="text" 
@@ -467,6 +467,37 @@ async function showContextMenu(instance: ComponentInstance, x: number, y: number
   `
 
   document.body.appendChild(contextMenuElement)
+
+  // Adjust position to stay within viewport bounds
+  const rect = contextMenuElement.getBoundingClientRect()
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+
+  let finalLeft = x
+  let finalTop = y
+
+  // If tooltip would go off the right edge, position it to the left of the cursor
+  if (rect.right > viewportWidth) {
+    finalLeft = x - rect.width - 10
+  }
+
+  // If tooltip would go off the bottom edge, position it above the cursor
+  if (rect.bottom > viewportHeight) {
+    finalTop = y - rect.height - 10
+  }
+
+  // Ensure tooltip doesn't go off the left edge
+  if (finalLeft < 0) {
+    finalLeft = 10
+  }
+
+  // Ensure tooltip doesn't go off the top edge
+  if (finalTop < 0) {
+    finalTop = 10
+  }
+
+  contextMenuElement.style.left = `${finalLeft}px`
+  contextMenuElement.style.top = `${finalTop}px`
 
   // Add click handlers for the open buttons
   const openComponentBtn = contextMenuElement.querySelector('#open-component-btn') as HTMLButtonElement
@@ -632,11 +663,15 @@ export function hideHoverMenu() {
 export function enableOverlay() {
   isOverlayEnabled = true
   createHighlightContainer()
+  // Set cursor to crosshair when overlay is enabled
+  document.body.style.cursor = 'crosshair'
 }
 
 export function disableOverlay() {
   isOverlayEnabled = false
   isHighlightAllActive = false
+  // Reset cursor when overlay is disabled
+  document.body.style.cursor = ''
   clearAllHighlights()
   currentHoveredId = null
   hideHoverMenu()
@@ -753,6 +788,8 @@ export function setHighlightAll(enabled: boolean) {
   if (enabled) {
     createHighlightContainer()
     showDebugOverlay()
+    // Set cursor to crosshair when overlay is enabled
+    document.body.style.cursor = 'crosshair'
   } else {
     hideDebugOverlay()
   }
@@ -765,6 +802,8 @@ export function toggleHighlightAll() {
     isOverlayEnabled = true
     createHighlightContainer()
     showDebugOverlay()
+    // Set cursor to crosshair when overlay is enabled
+    document.body.style.cursor = 'crosshair'
   } else {
     hideDebugOverlay()
   }

@@ -348,7 +348,9 @@ export function createComponentHighlighterPlugin(
         return
       }
 
-      console.log(`[component-highlighter] Transforming ${id}`)
+      if (options.debugMode) {
+        console.log(`[component-highlighter] Transforming ${id}`)
+      }
 
       return framework.transform(code, id)
     },
