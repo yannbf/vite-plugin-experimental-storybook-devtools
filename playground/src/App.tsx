@@ -37,7 +37,7 @@ const tasks: Task[] = [
   },
 ]
 
-export function App() {
+export default function App() {
   return (
     <div>
       {/* Header: simple component with no children */}

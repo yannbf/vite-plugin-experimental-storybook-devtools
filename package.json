@@ -14,8 +14,14 @@
     "url": "https://github.com/author/library/issues"
   },
   "exports": {
-    ".": "./dist/index.mjs",
-    "./react": "./dist/react.mjs",
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./react": {
+      "types": "./dist/frameworks/react/plugin.d.mts",
+      "default": "./dist/frameworks/react/plugin.mjs"
+    },
     "./package.json": "./package.json",
     "./client/overlay": "./dist/client/overlay.mjs",
     "./client/listeners": "./dist/client/listeners.mjs",

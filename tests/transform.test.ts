@@ -100,6 +100,23 @@ export default Button
       expect(result).toContain('isDefaultExport')
     })
 
+    it('should transform default export function declaration directly', () => {
+      const code = `
+import React from 'react'
+
+export default function App({ name }) {
+  return <div>Hello {name}</div>
+}
+`
+
+      const result = transform(code, '/src/App.tsx')
+
+      expect(result).toBeDefined()
+      expect(result).toContain('withComponentHighlighter')
+      expect(result).toContain('isDefaultExport')
+      expect(result).toContain('"App"')
+    })
+
     it('should transform const arrow function with export', () => {
       const code = `
 import React from 'react'

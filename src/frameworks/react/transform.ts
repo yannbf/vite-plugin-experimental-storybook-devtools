@@ -375,10 +375,25 @@ function wrapComponent(
       (originalDeclaration.type === 'CallExpression' &&
         (isMemo || isForwardRef))
     ) {
+      let componentExpression: t.Expression
+
+      if (originalDeclaration.type === 'FunctionDeclaration') {
+        // Convert FunctionDeclaration to FunctionExpression
+        componentExpression = t.functionExpression(
+          originalDeclaration.id,
+          originalDeclaration.params,
+          originalDeclaration.body,
+          originalDeclaration.generator,
+          originalDeclaration.async
+        )
+      } else {
+        componentExpression = originalDeclaration as t.Expression
+      }
+
       // Wrap the component
       const wrappedComponent = t.callExpression(
         t.identifier('withComponentHighlighter'),
-        [originalDeclaration as t.Expression, metaObject]
+        [componentExpression, metaObject]
       )
 
       exportDecl.declaration = wrappedComponent
