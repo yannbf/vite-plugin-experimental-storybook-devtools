@@ -654,6 +654,7 @@ function createDebugOverlay(): HTMLDivElement {
     position: fixed;
     top: 12px;
     right: 12px;
+    opacity: 0.9;
     background: rgba(0, 0, 0, 0.85);
     color: white;
     padding: 12px 16px;

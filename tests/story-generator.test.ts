@@ -181,6 +181,57 @@ describe('generateStory', () => {
       expect(result.content).toContain('icon: <Icon name="star" />')
     })
 
+    it('should replace function handlers in JSX with fn()', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          children: {
+            __isJSX: true,
+            source: '<TaskCard onAction={() => alert("test")} task={task} />',
+            componentRefs: ['TaskCard'],
+          },
+        },
+      })
+
+      expect(result.content).toContain('onAction={fn()}')
+      expect(result.content).not.toContain('() => alert("test")')
+      expect(result.content).toContain("import { fn } from 'storybook/test'")
+    })
+
+    it('should handle multiple function handlers in JSX', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          children: {
+            __isJSX: true,
+            source: '<><Button onClick={() => {}} onHover={function() {}} /></>',
+            componentRefs: ['Button'],
+          },
+        },
+      })
+
+      expect(result.content).toContain('onClick={fn()}')
+      expect(result.content).toContain('onHover={fn()}')
+      expect(result.content).toContain("import { fn } from 'storybook/test'")
+    })
+
+    it('should replace function handlers with template literals in JSX', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          children: {
+            __isJSX: true,
+            source: '<TaskCard onAction={() => alert(`Viewing: ${task.title}`)} task={task} />',
+            componentRefs: ['TaskCard'],
+          },
+        },
+      })
+
+      expect(result.content).toContain('onAction={fn()}')
+      expect(result.content).not.toContain('() => alert')
+      expect(result.content).toContain("import { fn } from 'storybook/test'")
+    })
+
     it('should handle function props with fn()', () => {
       const result = generateStory({
         meta: baseMeta,
@@ -231,6 +282,26 @@ describe('generateStory', () => {
       })
 
       expect(result.content).toContain("import { Icon } from './Icon'")
+    })
+
+    it('should extract component names from JSX source even if componentRefs is empty', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          children: {
+            __isJSX: true,
+            source: '<><TaskCard onAction={fn()} /><Button /></>',
+            componentRefs: [], // Empty refs, but source contains components
+          },
+        },
+        componentRegistry: new Map([
+          ['TaskCard', '/project/src/components/TaskCard.tsx'],
+          ['Button', '/project/src/components/Button.tsx'],
+        ]),
+      })
+
+      expect(result.content).toContain("import { TaskCard } from './TaskCard'")
+      expect(result.content).toContain("import { Button } from './Button'")
     })
 
     it('should handle relative imports from different directories', () => {

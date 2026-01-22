@@ -135,7 +135,7 @@ function serializeValue(value) {
       logDebug('Serializing single JSX element:', elementName)
       const source = reactElementToJSXString(value, {
         showDefaultProps: false,
-        showFunctions: true,
+        showFunctions: false,
         sortProps: true,
         useBooleanShorthandSyntax: true,
         useFragmentShortSyntax: true,

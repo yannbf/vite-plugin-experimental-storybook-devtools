@@ -9,8 +9,6 @@ import * as path from 'path'
 // Re-export types for consumers
 export type { SerializedProps, JSXSerializedValue, FunctionSerializedValue }
 
-type SerializedValue = JSXSerializedValue | FunctionSerializedValue | unknown
-
 export interface StoryGenerationData {
   meta: ComponentMeta
   props: SerializedProps
@@ -226,6 +224,29 @@ function escapeRegex(str: string): string {
 }
 
 /**
+ * Extract component names from JSX source string
+ * Parses JSX tags to find component references (capitalized names)
+ */
+function extractComponentNamesFromJSXSource(jsxSource: string): Set<string> {
+  const componentNames = new Set<string>()
+
+  // Match JSX opening tags: <ComponentName or <ComponentName.prop
+  // Only match capitalized component names (not DOM elements like div, span)
+  const jsxTagPattern = /<([A-Z][a-zA-Z0-9]*)(?:\s|>|\.)/g
+  let match
+
+  while ((match = jsxTagPattern.exec(jsxSource)) !== null) {
+    const componentName = match[1]
+    // Skip React fragments
+    if (componentName && componentName !== 'Fragment' && componentName !== 'React') {
+      componentNames.add(componentName)
+    }
+  }
+
+  return componentNames
+}
+
+/**
  * Recursively collect component references from serialized props
  */
 function collectComponentRefs(
@@ -234,7 +255,14 @@ function collectComponentRefs(
 ): void {
   for (const value of Object.values(props)) {
     if (isJSXSerializedValue(value)) {
+      // Add component refs from the serialized value
       for (const ref of value.componentRefs) {
+        refs.add(ref)
+      }
+      // Also extract component names from JSX source as a fallback
+      // This ensures we catch all components even if extraction missed some
+      const sourceRefs = extractComponentNamesFromJSXSource(value.source)
+      for (const ref of sourceRefs) {
         refs.add(ref)
       }
     } else if (typeof value === 'object' && value !== null) {
@@ -276,6 +304,12 @@ function hasAnyFunctionProps(props: SerializedProps): boolean {
     if (isFunctionSerializedValue(value)) {
       return true
     }
+    if (isJSXSerializedValue(value)) {
+      // Check if JSX source contains function handlers
+      if (hasFunctionHandlersInJSX(value.source)) {
+        return true
+      }
+    }
     if (typeof value === 'object' && value !== null && !isJSXSerializedValue(value)) {
       if (hasAnyFunctionProps(value as SerializedProps)) {
         return true
@@ -283,6 +317,168 @@ function hasAnyFunctionProps(props: SerializedProps): boolean {
     }
   }
   return false
+}
+
+/**
+ * Check if JSX source string contains function handlers
+ * Looks for patterns like onAction={() => ...} or onClick={function() {...}}
+ */
+function hasFunctionHandlersInJSX(jsxSource: string): boolean {
+  let pos = 0
+
+  // Find all prop assignments with balanced braces
+  while (pos < jsxSource.length) {
+    // Look for propName={ pattern
+    const propMatch = jsxSource.slice(pos).match(/(\w+)=\{/)
+    if (!propMatch) break
+
+    const propStart = pos + propMatch.index!
+    const braceStart = propStart + propMatch[0].length - 1 // Position of {
+
+    // Find matching closing brace
+    let braceCount = 0
+    let braceEnd = braceStart
+    let inString = false
+    let stringChar = ''
+
+    for (let i = braceStart; i < jsxSource.length; i++) {
+      const char = jsxSource[i]
+      const prevChar = i > 0 ? jsxSource[i - 1] : ''
+
+      // Handle string literals
+      if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
+        if (!inString) {
+          inString = true
+          stringChar = char
+        } else if (char === stringChar) {
+          inString = false
+        }
+        continue
+      }
+
+      if (inString) continue
+
+      if (char === '{') {
+        braceCount++
+      } else if (char === '}') {
+        braceCount--
+        if (braceCount === 0) {
+          braceEnd = i
+          break
+        }
+      }
+    }
+
+    if (braceCount !== 0) {
+      // Unmatched braces, skip this prop
+      pos = braceStart + 1
+      continue
+    }
+
+    // Extract the content between braces
+    const content = jsxSource.slice(braceStart + 1, braceEnd).trim()
+
+    // Check if content looks like a function handler
+    const functionPatterns = [
+      /^\([^)]*\)\s*=>/,           // () => or (args) =>
+      /^async\s*\([^)]*\)\s*=>/,    // async () =>
+      /^function\s*\(/,              // function(
+      /^[\w.]+\([^)]*\)/,           // functionCall()
+    ]
+
+    const isFunctionHandler = functionPatterns.some(pattern => pattern.test(content))
+
+    if (isFunctionHandler) {
+      return true
+    }
+
+    pos = braceEnd + 1
+  }
+
+  return false
+}
+
+/**
+ * Replace function handlers in JSX source with fn()
+ * This handles patterns like onAction={() => ...} -> onAction={fn()}
+ */
+function replaceFunctionHandlersInJSX(jsxSource: string): string {
+  let result = jsxSource
+  let pos = 0
+
+  // Find all prop assignments with balanced braces
+  while (pos < result.length) {
+    // Look for propName={ pattern
+    const propMatch = result.slice(pos).match(/(\w+)=\{/)
+    if (!propMatch) break
+
+    const propStart = pos + propMatch.index!
+    const propName = propMatch[1]
+    const braceStart = propStart + propMatch[0].length - 1 // Position of {
+
+    // Find matching closing brace
+    let braceCount = 0
+    let braceEnd = braceStart
+    let inString = false
+    let stringChar = ''
+
+    for (let i = braceStart; i < result.length; i++) {
+      const char = result[i]
+      const prevChar = i > 0 ? result[i - 1] : ''
+
+      // Handle string literals
+      if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
+        if (!inString) {
+          inString = true
+          stringChar = char
+        } else if (char === stringChar) {
+          inString = false
+        }
+        continue
+      }
+
+      if (inString) continue
+
+      if (char === '{') {
+        braceCount++
+      } else if (char === '}') {
+        braceCount--
+        if (braceCount === 0) {
+          braceEnd = i
+          break
+        }
+      }
+    }
+
+    if (braceCount !== 0) {
+      // Unmatched braces, skip this prop
+      pos = braceStart + 1
+      continue
+    }
+
+    // Extract the content between braces
+    const content = result.slice(braceStart + 1, braceEnd).trim()
+
+    // Check if content looks like a function handler
+    const functionPatterns = [
+      /^\([^)]*\)\s*=>/,           // () => or (args) =>
+      /^async\s*\([^)]*\)\s*=>/,    // async () =>
+      /^function\s*\(/,              // function(
+      /^[\w.]+\([^)]*\)/,           // functionCall()
+    ]
+
+    const isFunctionHandler = functionPatterns.some(pattern => pattern.test(content))
+
+    if (isFunctionHandler) {
+      // Replace the entire prop={...} with prop={fn()}
+      result = result.slice(0, propStart) + `${propName}={fn()}` + result.slice(braceEnd + 1)
+      pos = propStart + `${propName}={fn()}`.length
+    } else {
+      pos = braceEnd + 1
+    }
+  }
+
+  return result
 }
 
 /**
@@ -382,10 +578,12 @@ function formatPropKey(key: string): string {
  * Format a prop value for output
  */
 function formatPropValue(value: unknown, indentLevel: number): string {
-  // Handle JSX serialized values - emit raw JSX
+  // Handle JSX serialized values - emit raw JSX with function handlers replaced
   if (isJSXSerializedValue(value)) {
+    // Replace function handlers in JSX source with fn()
+    let jsxSource = replaceFunctionHandlersInJSX(value.source)
+
     // Format multi-line JSX with proper indentation
-    const jsxSource = value.source
     if (jsxSource.includes('\n')) {
       const indent = '  '.repeat(indentLevel)
       const lines = jsxSource.split('\n')
