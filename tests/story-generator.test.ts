@@ -263,6 +263,60 @@ describe('generateStory', () => {
       // Should only have one fn import
       expect(result.content.match(/import \{ fn \}/g)?.length).toBe(1)
     })
+
+    it('should replace styled component references with div elements', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          children: {
+            __isJSX: true,
+            source: '<styled.div className="spacing"><styled.button>Click me</styled.button></styled.div>',
+            componentRefs: [],
+          },
+        },
+      })
+
+      expect(result.content).toContain('children: <div className="spacing"><div>Click me</div></div>')
+    })
+
+    it('should replace unknown component references with div elements', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          children: {
+            __isJSX: true,
+            source: '<Spacing /><UnknownComponent prop="value" />',
+            componentRefs: ['Spacing', 'UnknownComponent'],
+          },
+        },
+        componentRegistry: new Map([
+          // Spacing and UnknownComponent are not in registry, so should be replaced with div
+        ]),
+      })
+
+      expect(result.content).toContain('children: <div /><div prop="value" />')
+    })
+
+    it('should keep known component references unchanged', () => {
+      const result = generateStory({
+        meta: baseMeta,
+        props: {
+          children: {
+            __isJSX: true,
+            source: '<KnownComponent /><UnknownComponent />',
+            componentRefs: ['KnownComponent', 'UnknownComponent'],
+          },
+        },
+        componentRegistry: new Map([
+          ['KnownComponent', '/project/src/components/KnownComponent.tsx'],
+          // UnknownComponent is not in registry
+        ]),
+      })
+
+      expect(result.content).toContain('children: <KnownComponent /><div />')
+      expect(result.content).toContain("import { KnownComponent } from './KnownComponent'")
+      // Should not try to import UnknownComponent
+    })
   })
 
   describe('import resolution', () => {

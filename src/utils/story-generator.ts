@@ -91,6 +91,7 @@ export function generateStory(data: StoryGenerationData): GeneratedStory {
       props,
       imports,
       componentName,
+      componentRegistry,
     })
   } else {
     // Generate new file
@@ -100,6 +101,7 @@ export function generateStory(data: StoryGenerationData): GeneratedStory {
       props,
       isDefaultExport,
       storyName,
+      componentRegistry,
     })
   }
 
@@ -133,6 +135,7 @@ function appendStoryToExisting(options: {
   props: SerializedProps
   imports: Array<{ name: string; path: string }>
   componentName: string
+  componentRegistry?: Map<string, string>
 }): string {
   const { existingContent, storyName, props, imports } = options
 
@@ -204,7 +207,7 @@ function appendStoryToExisting(options: {
   }
 
   // Generate the new story export
-  const argsContent = generateArgsContent(props, 1)
+  const argsContent = generateArgsContent(props, 1, options.componentRegistry)
   const hasArgs = Object.keys(props).length > 0
   const newStory = `
 export const ${finalStoryName}: Story = {${hasArgs ? `\n  args: ${argsContent},` : ''
@@ -525,6 +528,7 @@ function generateStoryContent(options: {
   props: SerializedProps
   isDefaultExport: boolean
   storyName: string
+  componentRegistry?: Map<string, string>
 }): string {
   const { componentName, imports, props, storyName } = options
 
@@ -541,7 +545,7 @@ function generateStoryContent(options: {
   ].join('\n')
 
   // Generate args object
-  const argsContent = generateArgsContent(props, 1)
+  const argsContent = generateArgsContent(props, 1, options.componentRegistry)
 
   // Build the story file
   const hasArgs = Object.keys(props).length > 0
@@ -564,7 +568,7 @@ export const ${storyName}: Story = {${hasArgs ? `\n  args: ${argsContent},` : ''
 /**
  * Generate the args object content with proper formatting
  */
-function generateArgsContent(props: SerializedProps, indentLevel: number): string {
+function generateArgsContent(props: SerializedProps, indentLevel: number, componentRegistry?: Map<string, string>): string {
   const indent = '  '.repeat(indentLevel)
   const innerIndent = '  '.repeat(indentLevel + 1)
 
@@ -576,7 +580,7 @@ function generateArgsContent(props: SerializedProps, indentLevel: number): strin
 
   const propsContent = entries
     .map(([key, value]) => {
-      const formattedValue = formatPropValue(value, indentLevel + 1)
+      const formattedValue = formatPropValue(value, indentLevel + 1, componentRegistry)
       return `${innerIndent}${formatPropKey(key)}: ${formattedValue},`
     })
     .join('\n')
@@ -596,13 +600,53 @@ function formatPropKey(key: string): string {
 }
 
 /**
+ * Replace styled component references and unknown component references with div elements
+ * Handles patterns like:
+ * - <styled.div> -> <div>
+ * - <styled.div /> -> <div />
+ * - </styled.div> -> </div>
+ * - Also replaces unknown component names that aren't in componentRegistry with div
+ */
+function replaceStyledComponentsInJSX(jsxSource: string, componentRegistry?: Map<string, string>): string {
+  let result = jsxSource
+
+  // First, handle styled.* patterns (like <styled.div>, <styled.Component />)
+  result = result.replace(/<styled\.([a-zA-Z][a-zA-Z0-9]*)/g, '<div')
+  result = result.replace(/<\/styled\.([a-zA-Z][a-zA-Z0-9]*)>/g, '</div>')
+
+  // Then, handle unknown component references
+  if (componentRegistry) {
+    // Extract all component names from the JSX
+    const componentNames = extractComponentNamesFromJSXSource(result)
+
+    for (const componentName of componentNames) {
+      // If component is not in registry, replace it with div
+      if (!componentRegistry.has(componentName)) {
+        // Replace opening tags: <ComponentName -> <div
+        const openingTagRegex = new RegExp(`<${componentName}(\\s|>)`, 'g')
+        result = result.replace(openingTagRegex, '<div$1')
+
+        // Replace closing tags: </ComponentName> -> </div>
+        const closingTagRegex = new RegExp(`</${componentName}>`, 'g')
+        result = result.replace(closingTagRegex, '</div>')
+      }
+    }
+  }
+
+  return result
+}
+
+/**
  * Format a prop value for output
  */
-function formatPropValue(value: unknown, indentLevel: number): string {
+function formatPropValue(value: unknown, indentLevel: number, componentRegistry?: Map<string, string>): string {
   // Handle JSX serialized values - emit raw JSX with function handlers replaced
   if (isJSXSerializedValue(value)) {
     // Replace function handlers in JSX source with fn()
     let jsxSource = replaceFunctionHandlersInJSX(value.source)
+
+    // Replace styled components and unknown component references with div
+    jsxSource = replaceStyledComponentsInJSX(jsxSource, componentRegistry)
 
     // Format multi-line JSX with proper indentation
     if (jsxSource.includes('\n')) {
@@ -643,7 +687,7 @@ function formatPropValue(value: unknown, indentLevel: number): string {
     const indent = '  '.repeat(indentLevel)
     const innerIndent = '  '.repeat(indentLevel + 1)
     const items = value
-      .map((item) => `${innerIndent}${formatPropValue(item, indentLevel + 1)},`)
+      .map((item) => `${innerIndent}${formatPropValue(item, indentLevel + 1, componentRegistry)},`)
       .join('\n')
     return `[\n${items}\n${indent}]`
   }
@@ -658,7 +702,7 @@ function formatPropValue(value: unknown, indentLevel: number): string {
     const props = entries
       .map(([k, v]) => {
         const formattedKey = formatPropKey(k)
-        const formattedValue = formatPropValue(v, indentLevel + 1)
+        const formattedValue = formatPropValue(v, indentLevel + 1, componentRegistry)
         return `${innerIndent}${formattedKey}: ${formattedValue},`
       })
       .join('\n')
@@ -683,7 +727,7 @@ export function generateStoryName(props: SerializedProps): string {
     }
   }
 
-  return 'Default'
+  return 'Snapshot'
 }
 
 function capitalizeFirst(str: string): string {
