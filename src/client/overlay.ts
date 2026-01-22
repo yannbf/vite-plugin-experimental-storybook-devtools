@@ -44,36 +44,12 @@ let currentHoveredId: string | null = null
 let selectedComponentId: string | null = null
 let currentCloseHandler: ((e: MouseEvent) => void) | null = null
 let currentEscapeHandler: ((e: KeyboardEvent) => void) | null = null
-let isCmdHeld = false
 
 // Cache for story file existence checks
 const storyFileCache: Map<string, { hasStory: boolean; storyPath: string | null }> = new Map()
 
 // Import component registry from listeners
 let componentRegistry: Map<string, ComponentInstance>
-
-// CMD key event handlers
-function handleKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Meta' || e.key === 'Command') {
-    isCmdHeld = true
-    updateHighlightPointerEvents()
-  }
-}
-
-function handleKeyUp(e: KeyboardEvent) {
-  if (e.key === 'Meta' || e.key === 'Command') {
-    isCmdHeld = false
-    updateHighlightPointerEvents()
-  }
-}
-
-// Update pointer-events for all highlight elements based on CMD state
-function updateHighlightPointerEvents() {
-  const pointerEvents = isCmdHeld ? 'none' : 'auto'
-  for (const el of highlightElements.values()) {
-    el.style.pointerEvents = pointerEvents
-  }
-}
 
 // Function to set component registry reference
 export function setComponentRegistry(registry: Map<string, ComponentInstance>) {
@@ -194,7 +170,7 @@ function createHighlightElement(instance: ComponentInstance): HTMLDivElement {
   el.style.cssText = `
     position: fixed;
     box-sizing: border-box;
-    pointer-events: ${isCmdHeld ? 'none' : 'auto'};
+    pointer-events: ${isHighlightAllActive ? 'none' : 'auto'};
     cursor: pointer;
   `
   return el
@@ -360,9 +336,91 @@ function drawAllHighlights() {
     }
   }
 
+  // Update pointer-events for all highlight elements based on highlight-all state
+  const pointerEvents = isHighlightAllActive ? 'none' : 'auto'
+  for (const el of highlightElements.values()) {
+    el.style.pointerEvents = pointerEvents
+  }
+
   // Update debug overlay if visible
   if (debugOverlayElement) {
     updateDebugOverlay()
+  }
+}
+
+// Create stories for all components that don't have stories
+function createStoriesForComponentsWithoutStories() {
+  if (!componentRegistry) return
+
+  // Get the component registry for import resolution
+  const getRegistry = (window as unknown as { __componentHighlighterGetRegistry?: () => Map<string, string> }).__componentHighlighterGetRegistry
+  let componentRegistryObj: Record<string, string> = {}
+  if (getRegistry) {
+    const registry = getRegistry()
+    componentRegistryObj = Object.fromEntries(registry)
+  }
+
+  // Track components that already have stories
+  const componentsWithStories = new Set<string>()
+
+  // Find components that have stories
+  for (const instance of componentRegistry.values()) {
+    if (!instance.element.isConnected) continue
+    const storyInfo = storyFileCache.get(instance.meta.filePath)
+    if (storyInfo?.hasStory) {
+      componentsWithStories.add(instance.meta.sourceId)
+    }
+  }
+
+  // Find components without stories and create stories for them
+  const componentsProcessed = new Set<string>()
+  const filePathsToInvalidate: string[] = []
+  let storiesCreated = 0
+
+  for (const instance of componentRegistry.values()) {
+    if (!instance.element.isConnected) continue
+
+    // Skip if we've already processed this component type
+    if (componentsProcessed.has(instance.meta.sourceId)) continue
+
+    // Skip if this component already has stories
+    if (componentsWithStories.has(instance.meta.sourceId)) continue
+
+    // Mark as processed
+    componentsProcessed.add(instance.meta.sourceId)
+    filePathsToInvalidate.push(instance.meta.filePath)
+
+    // Get suggested story name
+    const suggestedName = suggestStoryName(instance.props)
+
+    const componentInfo = {
+      meta: instance.meta,
+      props: instance.props,
+      serializedProps: instance.serializedProps,
+      componentRegistry: componentRegistryObj,
+      storyName: suggestedName,
+    }
+
+    // Emit event to create story
+    console.log('Creating story for component:', instance.meta.componentName, componentInfo)
+    overlayEvents.emit('log-info', componentInfo as Parameters<typeof overlayEvents.emit<'log-info'>>[1])
+
+    storiesCreated++
+  }
+
+  if (storiesCreated > 0) {
+    console.log(`[component-highlighter] Created stories for ${storiesCreated} components without stories`)
+
+    // After story creation, wait a bit for processing and then update the UI
+    setTimeout(() => {
+      // Invalidate cache for all components that had stories created
+      for (const filePath of filePathsToInvalidate) {
+        storyFileCache.delete(filePath)
+      }
+
+      // Re-render highlights and debug overlay to show updated story status
+      drawAllHighlights()
+    }, 1000) // Wait 1 second for story creation to complete
   }
 }
 
@@ -689,16 +747,11 @@ export function enableOverlay() {
   createHighlightContainer()
   // Set cursor to crosshair when overlay is enabled
   document.body.style.cursor = 'crosshair'
-
-  // Track CMD key state for click-through functionality
-  document.addEventListener('keydown', handleKeyDown)
-  document.addEventListener('keyup', handleKeyUp)
 }
 
 export function disableOverlay() {
   isOverlayEnabled = false
   isHighlightAllActive = false
-  isCmdHeld = false
   // Reset cursor when overlay is disabled
   document.body.style.cursor = ''
   clearAllHighlights()
@@ -706,10 +759,6 @@ export function disableOverlay() {
   hideHoverMenu()
   removeHighlightContainer()
   hideDebugOverlay()
-
-  // Remove CMD key tracking
-  document.removeEventListener('keydown', handleKeyDown)
-  document.removeEventListener('keyup', handleKeyUp)
 }
 
 // Debug overlay functions
@@ -778,12 +827,14 @@ function updateDebugOverlay() {
 
   debugOverlayElement.innerHTML = `
     <div style="font-weight: 600; margin-bottom: 8px; color: #ec4899; display: flex; align-items: center; gap: 6px;">
-      ${STORYBOOK_ICON_SVG}
+      <div id="storybook-logo" style="cursor: pointer; padding: 2px; border-radius: 3px; transition: background-color 0.2s; pointer-events: auto;" title="Improve coverage">
+        ${STORYBOOK_ICON_SVG}
+      </div>
       Component Stats
     </div>
     <div style="display: grid; gap: 4px;">
       <div style="display: flex; justify-content: space-between;">
-        <span style="color: #9ca3af;">Total instances:</span>
+        <span style="color: #9ca3af;">Total components:</span>
         <span style="font-weight: 500; color: white;">${totalComponents}</span>
       </div>
       <div style="display: flex; justify-content: space-between;">
@@ -800,6 +851,18 @@ function updateDebugOverlay() {
       </div>
     </div>
   `
+
+  // Add click handler for the storybook logo
+  const storybookLogo = debugOverlayElement.querySelector('#storybook-logo') as HTMLDivElement
+  if (storybookLogo) {
+    storybookLogo.addEventListener('click', () => createStoriesForComponentsWithoutStories())
+    storybookLogo.addEventListener('mouseenter', () => {
+      storybookLogo.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
+    })
+    storybookLogo.addEventListener('mouseleave', () => {
+      storybookLogo.style.backgroundColor = 'transparent'
+    })
+  }
 }
 
 function showDebugOverlay() {
@@ -837,12 +900,8 @@ export function toggleHighlightAll() {
     showDebugOverlay()
     // Set cursor to crosshair when overlay is enabled
     document.body.style.cursor = 'crosshair'
-    // Track CMD key state for click-through functionality
-    document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('keyup', handleKeyUp)
   } else {
     isOverlayEnabled = false
-    isCmdHeld = false
     // Reset cursor when overlay is disabled
     document.body.style.cursor = ''
     hideDebugOverlay()
@@ -850,9 +909,6 @@ export function toggleHighlightAll() {
     currentHoveredId = null
     hideHoverMenu()
     removeHighlightContainer()
-    // Remove CMD key tracking
-    document.removeEventListener('keydown', handleKeyDown)
-    document.removeEventListener('keyup', handleKeyUp)
   }
   drawAllHighlights()
   return isHighlightAllActive

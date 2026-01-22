@@ -244,7 +244,7 @@ test.describe('Component Highlighter', () => {
       await expect(debugOverlay).toBeVisible();
 
       // Check that it shows the expected stat labels
-      await expect(debugOverlay).toContainText('Total instances');
+      await expect(debugOverlay).toContainText('Total components');
       await expect(debugOverlay).toContainText('Unique components');
       await expect(debugOverlay).toContainText('With stories');
       await expect(debugOverlay).toContainText('Coverage');

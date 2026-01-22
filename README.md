@@ -184,7 +184,7 @@ export const Primary: Story = {
 
 When holding `Alt`, a debug overlay appears in the top-right corner showing:
 
-- **Total instances** - Number of component instances on screen
+- **Total components** - Number of component instances on screen
 - **Unique components** - Number of distinct component types
 - **With stories** - Components that have story files
 - **Coverage %** - Percentage of components with stories
