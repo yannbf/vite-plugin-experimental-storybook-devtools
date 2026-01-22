@@ -1,9 +1,9 @@
 /**
- * vite-plugin-component-highlighter
+ * vite-plugin-experimental-storybook-devtools
  *
  * Import from a framework-specific path:
  * ```ts
- * import componentHighlighter from 'vite-plugin-component-highlighter/react'
+ * import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/react'
  * ```
  */
 

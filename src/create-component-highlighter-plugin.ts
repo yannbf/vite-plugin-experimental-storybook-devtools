@@ -119,7 +119,7 @@ export function createComponentHighlighterPlugin(
   let server: ViteDevServer | undefined
 
   return {
-    name: 'vite-plugin-component-highlighter',
+    name: 'vite-plugin-experimental-storybook-devtools',
     enforce: 'pre',
     configResolved(config) {
       isServe = config.command === 'serve'
@@ -187,7 +187,7 @@ export function createComponentHighlighterPlugin(
           type: 'action',
           action: {
             importFrom:
-              'vite-plugin-component-highlighter/client/vite-devtools',
+              'vite-plugin-experimental-storybook-devtools/client/vite-devtools',
             importName: 'default',
           },
         })

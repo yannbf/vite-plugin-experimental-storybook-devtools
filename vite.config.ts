@@ -25,11 +25,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'vite-plugin-component-highlighter/client/listeners': r(
+      'vite-plugin-experimental-storybook-devtools/client/listeners': r(
         './src/client/listeners.ts'
       ),
-      'vite-plugin-component-highlighter/client/overlay': r('./src/client/overlay.ts'),
-      'vite-plugin-component-highlighter/client/vite-devtools': r(
+      'vite-plugin-experimental-storybook-devtools/client/overlay': r('./src/client/overlay.ts'),
+      'vite-plugin-experimental-storybook-devtools/client/vite-devtools': r(
         './src/client/vite-devtools.ts'
       ),
     },

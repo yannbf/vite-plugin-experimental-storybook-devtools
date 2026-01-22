@@ -3,7 +3,7 @@
  *
  * Import this to use the component highlighter with React:
  * ```ts
- * import componentHighlighter from 'vite-plugin-component-highlighter/react'
+ * import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/react'
  * ```
  */
 
@@ -19,7 +19,7 @@ import { reactFramework } from '.'
  * import { defineConfig } from 'vite'
  * import react from '@vitejs/plugin-react'
  * import { DevTools } from '@vitejs/devtools'
- * import componentHighlighter from 'vite-plugin-component-highlighter/react'
+ * import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/react'
  *
  * export default defineConfig({
  *   plugins: [
