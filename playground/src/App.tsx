@@ -1,10 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Header } from './components/Header'
 import { Button } from './components/Button'
 import { TaskCard, type Task } from './components/TaskCard'
 import { TaskList } from './components/TaskList'
+import { TaskForm, type TaskFormData } from './components/Form'
+import { Modal } from './components/Modal'
 
-const tasks: Task[] = [
+const initialTasks: Task[] = [
   {
     id: '1',
     title: 'Review component highlighter PR',
@@ -37,7 +39,29 @@ const tasks: Task[] = [
   },
 ]
 
-export default function App() {
+export const App = () => {
+  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  function handleAddTask(formData: TaskFormData) {
+    const newTask: Task = {
+      id: String(Date.now()),
+      title: formData.title,
+      status: formData.status,
+      metadata: {
+        priority: formData.priority,
+        dueDate: formData.dueDate,
+        assignee: { name: formData.assignee },
+      },
+    }
+
+    setTasks((prev) => [newTask, ...prev])
+    setIsModalOpen(false)
+  }
+
+  const inProgressCount = tasks.filter((t) => t.status === 'in-progress').length
+  const completedCount = tasks.filter((t) => t.status === 'completed').length
+
   return (
     <div>
       {/* Header: simple component with no children */}
@@ -54,7 +78,7 @@ export default function App() {
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {/* Buttons: primary and secondary variants */}
             <Button variant="secondary">Filter</Button>
-            <Button variant="primary" onClick={() => alert('New task!')}>
+            <Button variant="primary" onClick={() => setIsModalOpen(true)}>
               + New Task
             </Button>
           </div>
@@ -63,15 +87,15 @@ export default function App() {
         {/* Non-component content */}
         <div className="stats-row">
           <div className="stat-card">
-            <div className="stat-value">3</div>
+            <div className="stat-value">{tasks.length}</div>
             <div className="stat-label">Total Tasks</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">1</div>
+            <div className="stat-value">{inProgressCount}</div>
             <div className="stat-label">In Progress</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">1</div>
+            <div className="stat-value">{completedCount}</div>
             <div className="stat-label">Completed</div>
           </div>
         </div>
@@ -87,9 +111,23 @@ export default function App() {
             />
           ))}
 
-          <Button variant="secondary" onClick={() => alert('Load more!')}>Load more</Button>
+          <Button variant="secondary" onClick={() => alert('Load more!')}>
+            Load more
+          </Button>
         </TaskList>
       </main>
+
+      {/* Task Creation Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        title="Create New Task"
+        onClose={() => setIsModalOpen(false)}
+      >
+        <TaskForm
+          onSubmit={handleAddTask}
+          onCancel={() => setIsModalOpen(false)}
+        />
+      </Modal>
     </div>
   )
 }
