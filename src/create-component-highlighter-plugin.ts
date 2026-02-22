@@ -167,6 +167,13 @@ export function createComponentHighlighterPlugin(
     configResolved(config) {
       isServe = config.command === 'serve'
     },
+    config: (viteConfig) => {
+      viteConfig.optimizeDeps ??= {}
+      viteConfig.optimizeDeps.include ??= []
+      viteConfig.optimizeDeps.include.push(
+        'react-element-to-jsx-string/dist/esm/index.js',
+      )
+    },
     configureServer(srv) {
       server = srv
 
