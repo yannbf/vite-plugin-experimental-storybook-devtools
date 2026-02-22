@@ -57,6 +57,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.0.17
         version: 4.0.17(@vitest/browser@4.0.17(vite@8.0.0-beta.15)(vitest@4.0.17))(vitest@4.0.17)
+      '@vue/compiler-sfc':
+        specifier: ^3.5.28
+        version: 3.5.28
       bumpp:
         specifier: ^10.3.2
         version: 10.4.0(magicast@0.5.1)

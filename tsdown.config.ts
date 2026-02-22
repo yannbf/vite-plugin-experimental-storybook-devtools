@@ -4,6 +4,7 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/frameworks/react/plugin.ts',
+    'src/frameworks/vue/plugin.ts',
     'src/client/listeners.ts',
     'src/client/overlay.ts',
     'src/client/vite-devtools.ts',
@@ -17,5 +18,6 @@ export default defineConfig({
     '@babel/traverse',
     '@babel/generator',
     '@babel/types',
+    '@vue/compiler-sfc',
   ],
 })

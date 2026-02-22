@@ -8,7 +8,7 @@ import { DevTools } from '@vitejs/devtools'
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin'
 import { playwright } from '@vitest/browser-playwright'
 
-import componentHighlighter from '../../src/frameworks/react/plugin'
+import componentHighlighter from '../../src/frameworks/vue/plugin'
 
 const r = (filepath: string) =>
   fileURLToPath(new URL(filepath, import.meta.url))

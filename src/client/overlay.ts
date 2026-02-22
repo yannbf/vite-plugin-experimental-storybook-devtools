@@ -33,6 +33,11 @@ const STORYBOOK_ICON_SVG = `<svg width="16" height="16" viewBox="-31.5 0 319 319
   <path fill="#FFF" d="M188.67,39.13L190.19,2.41L220.88,0L222.21,37.86C222.25,39.18,221.22,40.29,219.9,40.33C219.34,40.35,218.79,40.17,218.34,39.82L206.51,30.5L192.49,41.13C191.44,41.93,189.95,41.72,189.15,40.67C188.81,40.23,188.64,39.68,188.67,39.13ZM149.41,119.98C149.41,126.21,191.36,123.22,196.99,118.85C196.99,76.45,174.23,54.17,132.57,54.17C90.91,54.17,67.57,76.79,67.57,110.74C67.57,169.85,147.35,170.98,147.35,203.23C147.35,212.28,142.91,217.65,133.16,217.65C120.46,217.65,115.43,211.17,116.02,189.1C116.02,184.32,67.57,182.82,66.09,189.1C62.33,242.57,95.64,257.99,133.75,257.99C170.69,257.99,199.65,238.3,199.65,202.66C199.65,139.3,118.68,141,118.68,109.6C118.68,96.88,128.14,95.18,133.75,95.18C139.66,95.18,150.3,96.22,149.41,119.98Z"/>
 </svg>`
 
+const OVERLAY_Z_INDEX = {
+  container: 2147483000,
+  menu: 2147483647,
+} as const
+
 // Colors for highlights - simplified color scheme
 const COLORS = {
   // Blue for non-hovered elements when Option is held
@@ -165,7 +170,7 @@ function createHighlightContainer() {
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 999998;
+    z-index: ${OVERLAY_Z_INDEX.container};
   `
   document.body.appendChild(highlightContainer)
 }
@@ -192,6 +197,32 @@ function getDOMDepth(element: HTMLElement): number {
   return depth
 }
 
+/**
+ * Estimate effective stacking order for an element.
+ *
+ * DOM depth alone fails for portals/modals because they can be shallow in the DOM
+ * but visually above everything else due to a high z-index on an ancestor.
+ *
+ * We use the highest numeric z-index found on the element/ancestor chain as the
+ * primary sort key, and DOM depth as a tiebreaker.
+ */
+function getEffectiveStackOrder(element: HTMLElement): number {
+  let highestAncestorZIndex = 0
+  let current: HTMLElement | null = element
+
+  while (current && current !== document.body) {
+    const computed = window.getComputedStyle(current)
+    const parsed = Number.parseInt(computed.zIndex, 10)
+    if (!Number.isNaN(parsed)) {
+      highestAncestorZIndex = Math.max(highestAncestorZIndex, parsed)
+    }
+    current = current.parentElement
+  }
+
+  const depth = getDOMDepth(element)
+  return highestAncestorZIndex * 10000 + depth
+}
+
 function createHighlightElement(instance: ComponentInstance): HTMLDivElement {
   const el = document.createElement('div')
   el.dataset['highlightId'] = instance.id
@@ -215,12 +246,15 @@ function updateHighlightElement(
   const rect = instance.rect
   const colorConfig = COLORS[type]
 
-  // Set z-index based on DOM depth - deeper elements (children) get higher z-index
-  // This ensures clicking on a child highlight captures the child, not the parent
-  const depth = instance.element?.isConnected
-    ? getDOMDepth(instance.element)
-    : 0
-  el.style.zIndex = String(depth)
+  // Set z-index based on effective stacking order.
+  // High z-index elements (e.g. modals/portals) must stay above regular content,
+  // while depth still makes children win over parents within the same stack level.
+  const stackOrder =
+    instance.element?.isConnected &&
+    instance.element?.nodeType === Node.ELEMENT_NODE
+      ? getEffectiveStackOrder(instance.element as HTMLElement)
+      : 0
+  el.style.zIndex = String(stackOrder)
 
   el.style.left = `${rect.left}px`
   el.style.top = `${rect.top}px`
@@ -403,7 +437,11 @@ function createStoriesForComponentsWithoutStories() {
 
   // Find components that have stories
   for (const instance of componentRegistry.values()) {
-    if (!instance.element.isConnected) continue
+    if (
+      !instance.element.isConnected ||
+      instance.element.nodeType !== Node.ELEMENT_NODE
+    )
+      continue
     const storyInfo = storyFileCache.get(instance.meta.filePath)
     if (storyInfo?.hasStory) {
       componentsWithStories.add(instance.meta.sourceId)
@@ -416,7 +454,11 @@ function createStoriesForComponentsWithoutStories() {
   let storiesCreated = 0
 
   for (const instance of componentRegistry.values()) {
-    if (!instance.element.isConnected) continue
+    if (
+      !instance.element.isConnected ||
+      instance.element.nodeType !== Node.ELEMENT_NODE
+    )
+      continue
 
     // Skip if we've already processed this component type
     if (componentsProcessed.has(instance.meta.sourceId)) continue
@@ -608,7 +650,7 @@ async function showContextMenu(
     border: 1px solid #d1d5db;
     border-radius: 6px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    z-index: 9999999;
+    z-index: ${OVERLAY_Z_INDEX.menu};
     min-width: 320px;
     max-width: 420px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -667,9 +709,12 @@ async function showContextMenu(
 
   contextMenuElement.innerHTML = `
     <div style="padding: 12px;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-        ${storyInfo.hasStory ? STORYBOOK_ICON_SVG : ''}
-        <span style="font-weight: bold; color: #2563eb;">${meta.componentName}</span>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          ${storyInfo.hasStory ? STORYBOOK_ICON_SVG : ''}
+          <span style="font-weight: bold; color: #2563eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${meta.componentName}</span>
+        </div>
+        <button id="close-context-menu-btn" aria-label="Close" style="background: transparent; border: none; color: #6b7280; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 2px;">×</button>
       </div>
       <div style="color: #6b7280; font-size: 11px; margin-bottom: 10px; word-break: break-all;">${relativePath}</div>
       ${openButtonsHtml}
@@ -741,6 +786,9 @@ async function showContextMenu(
   const openStoriesBtn = contextMenuElement.querySelector(
     '#open-stories-btn',
   ) as HTMLButtonElement
+  const closeContextMenuBtn = contextMenuElement.querySelector(
+    '#close-context-menu-btn',
+  ) as HTMLButtonElement
 
   openComponentBtn.addEventListener('click', () => {
     openInEditor(meta.filePath)
@@ -751,6 +799,12 @@ async function showContextMenu(
       openInEditor(storyInfo.storyPath!)
     })
   }
+
+  closeContextMenuBtn.addEventListener('click', () => {
+    selectedComponentId = null
+    hideContextMenu()
+    drawAllHighlights()
+  })
 
   // Add click handlers for save buttons
   const saveStoryBtn = contextMenuElement.querySelector(
@@ -918,7 +972,7 @@ export function showHoverMenu(
     font-size: 12px;
     font-family: monospace;
     pointer-events: none;
-    z-index: 999999;
+    z-index: ${OVERLAY_Z_INDEX.menu};
     max-width: 300px;
     word-break: break-all;
     display: flex;
@@ -1000,7 +1054,11 @@ function updateDebugOverlay() {
 
   if (componentRegistry) {
     for (const instance of componentRegistry.values()) {
-      if (!instance.element.isConnected) continue
+      if (
+        !instance.element.isConnected ||
+        instance.element.nodeType !== Node.ELEMENT_NODE
+      )
+        continue
       totalComponents++
       uniqueSourceIds.add(instance.meta.sourceId)
 
@@ -1151,7 +1209,11 @@ export function clearSelection() {
 export function updateInstanceRects() {
   // Update rects for all instances and redraw
   for (const instance of componentRegistry.values()) {
-    if (instance.element && instance.element.isConnected) {
+    if (
+      instance.element &&
+      instance.element.isConnected &&
+      instance.element.nodeType === Node.ELEMENT_NODE
+    ) {
       instance.rect = instance.element.getBoundingClientRect()
     }
   }

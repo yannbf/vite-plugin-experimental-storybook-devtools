@@ -108,6 +108,10 @@ export function createComponentHighlighterPlugin(
   framework: FrameworkConfig,
   options: ComponentHighlighterOptions = {},
 ): Plugin {
+  const runtimeHelperVirtualId =
+    'vite-plugin-experimental-storybook-devtools/runtime-helpers'
+  const resolvedRuntimeHelperVirtualId = `\0${runtimeHelperVirtualId}`
+
   const {
     include = framework.extensions.map((ext) => `**/*${ext}`),
     exclude = [
@@ -381,12 +385,42 @@ export function createComponentHighlighterPlugin(
       },
     },
     resolveId(id) {
+      if (id === runtimeHelperVirtualId) {
+        return resolvedRuntimeHelperVirtualId
+      }
       if (id === framework.virtualModuleId) {
         return '\0' + id
       }
       return null
     },
     load(id) {
+      if (id === resolvedRuntimeHelperVirtualId) {
+        return `export function findFirstTrackableElement(root) {
+  if (!root || root.nodeType !== Node.ELEMENT_NODE) return null
+
+  const rootElement = root
+  if (rootElement.offsetWidth > 0 || rootElement.offsetHeight > 0) {
+    return rootElement
+  }
+
+  const walker = document.createTreeWalker(
+    rootElement,
+    NodeFilter.SHOW_ELEMENT,
+    {
+      acceptNode: (node) => {
+        const el = node
+        return el.offsetWidth > 0 || el.offsetHeight > 0
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP
+      },
+    }
+  )
+
+  const firstChild = walker.firstChild()
+  return firstChild || rootElement
+}
+`
+      }
       if (id === '\0' + framework.virtualModuleId) {
         return framework.setupVirtualModule({
           eventName,
