@@ -19,4 +19,3 @@ export function Header({ title, userName }: HeaderProps) {
     </header>
   )
 }
-

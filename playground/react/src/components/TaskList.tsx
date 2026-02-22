@@ -19,4 +19,3 @@ export function TaskList({ title, count, children }: TaskListProps) {
     </section>
   )
 }
-

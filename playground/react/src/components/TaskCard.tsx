@@ -51,4 +51,3 @@ export function TaskCard({ task, onAction }: TaskCardProps) {
     </div>
   )
 }
-

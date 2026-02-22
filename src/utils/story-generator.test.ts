@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateStory, generateStoryName } from '../src/utils/story-generator'
+import { generateStory, generateStoryName } from './story-generator'
 
 describe('generateStory', () => {
   const baseMeta = {
@@ -20,7 +20,9 @@ describe('generateStory', () => {
         },
       })
 
-      expect(result.content).toContain("import type { Meta, StoryObj } from '@storybook/react-vite'")
+      expect(result.content).toContain(
+        "import type { Meta, StoryObj } from '@storybook/react-vite'",
+      )
       expect(result.content).toContain("import { Button } from './Button'")
       expect(result.content).toContain('component: Button')
       expect(result.content).toContain('export default meta')
@@ -214,7 +216,8 @@ describe('generateStory', () => {
         props: {
           children: {
             __isJSX: true,
-            source: '<><Button onClick={() => {}} onHover={function() {}} /></>',
+            source:
+              '<><Button onClick={() => {}} onHover={function() {}} /></>',
             componentRefs: ['Button'],
           },
         },
@@ -231,7 +234,8 @@ describe('generateStory', () => {
         props: {
           children: {
             __isJSX: true,
-            source: '<TaskCard onAction={() => alert(`Viewing: ${task.title}`)} task={task} />',
+            source:
+              '<TaskCard onAction={() => alert(`Viewing: ${task.title}`)} task={task} />',
             componentRefs: ['TaskCard'],
           },
         },
@@ -280,13 +284,16 @@ describe('generateStory', () => {
         props: {
           children: {
             __isJSX: true,
-            source: '<styled.div className="spacing"><styled.button>Click me</styled.button></styled.div>',
+            source:
+              '<styled.div className="spacing"><styled.button>Click me</styled.button></styled.div>',
             componentRefs: [],
           },
         },
       })
 
-      expect(result.content).toContain('children: <div className="spacing"><div>Click me</div></div>')
+      expect(result.content).toContain(
+        'children: <div className="spacing"><div>Click me</div></div>',
+      )
     })
 
     it('should replace unknown component references with div elements', () => {
@@ -324,7 +331,9 @@ describe('generateStory', () => {
       })
 
       expect(result.content).toContain('children: <KnownComponent /><div />')
-      expect(result.content).toContain("import { KnownComponent } from './KnownComponent'")
+      expect(result.content).toContain(
+        "import { KnownComponent } from './KnownComponent'",
+      )
       // Should not try to import UnknownComponent
     })
   })
@@ -386,7 +395,9 @@ describe('generateStory', () => {
         ]),
       })
 
-      expect(result.content).toContain("import { Header } from '../components/Header'")
+      expect(result.content).toContain(
+        "import { Header } from '../components/Header'",
+      )
     })
 
     it('should not import self-references', () => {
@@ -455,7 +466,9 @@ export const Primary: Story = {
     })
 
     it('should increment suffix for multiple duplicates', () => {
-      const contentWithTwoStories = existingContent + `
+      const contentWithTwoStories =
+        existingContent +
+        `
 export const Primary2: Story = {
   args: {
     label: "Primary 2",
@@ -515,7 +528,9 @@ export const Primary: Story = {
       })
 
       // Should only have one fn import
-      const fnImports = result.content.match(/import.*fn.*from.*storybook\/test/g)
+      const fnImports = result.content.match(
+        /import.*fn.*from.*storybook\/test/g,
+      )
       expect(fnImports?.length).toBe(1)
     })
   })
@@ -558,7 +573,9 @@ describe('generateStoryName', () => {
   })
 
   it('should prioritize variant over other props', () => {
-    expect(generateStoryName({ variant: 'primary', type: 'submit' })).toBe('Primary')
+    expect(generateStoryName({ variant: 'primary', type: 'submit' })).toBe(
+      'Primary',
+    )
   })
 
   it('should return Snapshot for empty props', () => {
@@ -566,7 +583,9 @@ describe('generateStoryName', () => {
   })
 
   it('should return Snapshot for non-meaningful props', () => {
-    expect(generateStoryName({ children: 'text', className: 'btn' })).toBe('Snapshot')
+    expect(generateStoryName({ children: 'text', className: 'btn' })).toBe(
+      'Snapshot',
+    )
   })
 
   it('should handle invalid prop values that result in invalid identifiers', () => {
@@ -575,4 +594,3 @@ describe('generateStoryName', () => {
     expect(generateStoryName({ variant: '123invalid' })).toBe('123invalid')
   })
 })
-

@@ -21,7 +21,7 @@ export function Input({
 	required = false,
 	onChange,
 }: InputProps) {
-	const inputId = id || name || label.toLowerCase().replace(/\s+/g, '-')
+	const inputId = id || name || label?.toLowerCase().replace(/\s+/g, '-')
 
 	return (
 		<label htmlFor={inputId} className="input-field">
