@@ -16,7 +16,7 @@ export const setupVirtualModule: VirtualModuleSetup = (
 ): string => {
   return `
 import { defineComponent, h, ref, provide, inject, onMounted, onUpdated, onUnmounted, getCurrentInstance, computed } from 'vue'
-import { findFirstTrackableElement } from 'vite-plugin-experimental-storybook-devtools/runtime-helpers'
+import { cleanupInstanceTracking, findFirstTrackableElement, syncInstanceTracking } from 'vite-plugin-experimental-storybook-devtools/runtime-helpers'
 
 const DEBUG_MODE = ${options.debugMode ? 'true' : 'false'}
 globalThis.logDebug = (...args) => {
@@ -165,16 +165,7 @@ export function withComponentHighlighter(meta) {
     return
   }
 
-  const registration = { id: null, element: null }
-  let mutationObserver = null
-  let resizeObserver = null
-
-  const disconnectObservers = () => {
-    mutationObserver?.disconnect()
-    resizeObserver?.disconnect()
-    mutationObserver = null
-    resizeObserver = null
-  }
+  const registration = { id: null, element: null, disconnect: null }
 
   const resolveElementToTrack = () => {
     let element = instance.proxy?.$el || instance.vnode?.el || instance.subTree?.el
@@ -205,41 +196,6 @@ export function withComponentHighlighter(meta) {
     return findFirstTrackableElement(element)
   }
 
-  const attachObservers = (id, element) => {
-    mutationObserver = new MutationObserver(() => {
-      const registeredInstance = componentRegistry.get(id)
-      if (
-        registeredInstance &&
-        registeredInstance.element &&
-        registeredInstance.element.isConnected
-      ) {
-        registeredInstance.rect =
-          registeredInstance.element.getBoundingClientRect()
-      }
-    })
-
-    mutationObserver.observe(element, {
-      attributes: true,
-      childList: true,
-      subtree: true,
-      attributeFilter: ['style', 'class'],
-    })
-
-    resizeObserver = new ResizeObserver(() => {
-      const registeredInstance = componentRegistry.get(id)
-      if (
-        registeredInstance &&
-        registeredInstance.element &&
-        registeredInstance.element.isConnected
-      ) {
-        registeredInstance.rect =
-          registeredInstance.element.getBoundingClientRect()
-      }
-    })
-
-    resizeObserver.observe(element)
-  }
-
   const registerOrUpdate = () => {
     const element = resolveElementToTrack()
     if (!element) {
@@ -249,21 +205,16 @@ export function withComponentHighlighter(meta) {
 
     const props = instance.proxy?.$props || {}
 
-    if (registration.id && registration.element === element) {
-      updateInstanceProps(registration.id, props)
-      return
-    }
-
-    if (registration.id) {
-      unregisterInstance(registration.id)
-    }
-
-    disconnectObservers()
-
-    const id = registerInstance(meta, props, element)
-    registration.id = id
-    registration.element = element
-    attachObservers(id, element)
+    syncInstanceTracking({
+      state: registration,
+      element,
+      props,
+      register: (nextElement, nextProps) =>
+        registerInstance(meta, nextProps, nextElement),
+      unregister: unregisterInstance,
+      updateProps: updateInstanceProps,
+      getInstance: (lookupId) => componentRegistry.get(lookupId),
+    })
   }
   
   // Store meta in a way that child components can access it
@@ -278,12 +229,7 @@ export function withComponentHighlighter(meta) {
   })
 
   onUnmounted(() => {
-    disconnectObservers()
-    if (registration.id) {
-      unregisterInstance(registration.id)
-      registration.id = null
-      registration.element = null
-    }
+    cleanupInstanceTracking(registration, unregisterInstance)
   })
 }
 

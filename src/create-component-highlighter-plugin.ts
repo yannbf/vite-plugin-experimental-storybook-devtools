@@ -6,6 +6,7 @@ import { generateStory } from './utils/story-generator'
 import { defineRpcFunction } from '@vitejs/devtools-kit'
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
 
 // RPC function type declarations
 declare module '@vitejs/devtools-kit' {
@@ -111,6 +112,20 @@ export function createComponentHighlighterPlugin(
   const runtimeHelperVirtualId =
     'vite-plugin-experimental-storybook-devtools/runtime-helpers'
   const resolvedRuntimeHelperVirtualId = `\0${runtimeHelperVirtualId}`
+  const packageRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+  )
+  const runtimeHelperFilePath = path.join(
+    packageRoot,
+    'dist',
+    'runtime-helpers.mjs',
+  )
+  const runtimeHelperSourcePath = path.join(
+    packageRoot,
+    'src',
+    'runtime-helpers.ts',
+  )
 
   const {
     include = framework.extensions.map((ext) => `**/*${ext}`),
@@ -145,6 +160,10 @@ export function createComponentHighlighterPlugin(
     },
     configureServer(srv) {
       server = srv
+
+      if (fs.existsSync(runtimeHelperSourcePath)) {
+        srv.watcher.add(runtimeHelperSourcePath)
+      }
 
       // Add middleware to check if story files exist
       srv.middlewares.use(
@@ -393,33 +412,30 @@ export function createComponentHighlighterPlugin(
       }
       return null
     },
-    load(id) {
+    async load(id) {
       if (id === resolvedRuntimeHelperVirtualId) {
-        return `export function findFirstTrackableElement(root) {
-  if (!root || root.nodeType !== Node.ELEMENT_NODE) return null
+        const shouldUseSource =
+          isServe && fs.existsSync(runtimeHelperSourcePath)
 
-  const rootElement = root
-  if (rootElement.offsetWidth > 0 || rootElement.offsetHeight > 0) {
-    return rootElement
-  }
+        if (shouldUseSource && server) {
+          const transformed = await server.transformRequest(
+            runtimeHelperSourcePath,
+          )
+          if (transformed?.code) {
+            return transformed.code
+          }
+        }
 
-  const walker = document.createTreeWalker(
-    rootElement,
-    NodeFilter.SHOW_ELEMENT,
-    {
-      acceptNode: (node) => {
-        const el = node
-        return el.offsetWidth > 0 || el.offsetHeight > 0
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_SKIP
-      },
-    }
-  )
+        if (shouldUseSource) {
+          return fs.readFileSync(runtimeHelperSourcePath, 'utf-8')
+        }
 
-  const firstChild = walker.firstChild()
-  return firstChild || rootElement
-}
-`
+        if (!fs.existsSync(runtimeHelperFilePath)) {
+          throw new Error(
+            '[component-highlighter] runtime helpers not built. Run `pnpm build` first.',
+          )
+        }
+        return fs.readFileSync(runtimeHelperFilePath, 'utf-8')
       }
       if (id === '\0' + framework.virtualModuleId) {
         return framework.setupVirtualModule({
@@ -452,6 +468,15 @@ export function createComponentHighlighterPlugin(
       }
 
       return framework.transform(code, id)
+    },
+    handleHotUpdate(ctx) {
+      if (ctx.file === runtimeHelperSourcePath) {
+        const mod = ctx.server.moduleGraph.getModuleById(
+          resolvedRuntimeHelperVirtualId,
+        )
+        return mod ? [mod] : []
+      }
+      return
     },
   }
 }

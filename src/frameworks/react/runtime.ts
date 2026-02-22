@@ -11,10 +11,13 @@ import type { HighlighterOptions, VirtualModuleSetup } from '../types'
  * Setup the React virtual module runtime
  * Returns the runtime code as a string to be served as a virtual module
  */
-export const setupVirtualModule: VirtualModuleSetup = (options: HighlighterOptions): string => {
+export const setupVirtualModule: VirtualModuleSetup = (
+  options: HighlighterOptions,
+): string => {
   return `
 import React, { createElement, useEffect, useRef, useState } from 'react'
 import reactElementToJSXString from 'react-element-to-jsx-string/dist/esm/index.js'
+import { cleanupInstanceTracking, findFirstTrackableElement, syncInstanceTracking } from 'vite-plugin-experimental-storybook-devtools/runtime-helpers'
 
 const DEBUG_MODE = ${options.debugMode ? 'true' : 'false'}
 globalThis.logDebug = (...args) => {
@@ -298,89 +301,48 @@ if (typeof window !== 'undefined') {
   window.__componentHighlighterGetRegistry = getComponentRegistry
 }
 
-
 // Component boundary that tracks position without DOM modification
 export const ComponentHighlighterBoundary = ({ meta, props, children }) => {
   const ref = useRef(null)
   // Track registration state with element reference to handle StrictMode and HMR correctly
-  const registrationRef = useRef({ id: null, element: null })
+  const registrationRef = useRef({ id: null, element: null, disconnect: null })
+
+  const resolveElementToTrack = (root) => {
+    if (!root) return null
+    return findFirstTrackableElement(root)
+  }
+
+  const registerOrUpdateElement = (elementToTrack) => {
+    if (!elementToTrack) return
+
+    syncInstanceTracking({
+      state: registrationRef.current,
+      element: elementToTrack,
+      props,
+      register: (element, nextProps) =>
+        registerInstance(meta, nextProps, element),
+      unregister: unregisterInstance,
+      updateProps: updateInstanceProps,
+      getInstance: (lookupId) => componentRegistry.get(lookupId),
+    })
+  }
 
   useEffect(() => {
     if (!ref.current) return
 
-    // Find the actual DOM element with dimensions
-    let elementToTrack = ref.current
-
-    // If our wrapper span has no dimensions, find the first child with dimensions
-    if (elementToTrack.offsetWidth === 0 && elementToTrack.offsetHeight === 0) {
-      const walker = document.createTreeWalker(
-        elementToTrack,
-        NodeFilter.SHOW_ELEMENT,
-        {
-          acceptNode: (node) => {
-            const el = node
-            return el.offsetWidth > 0 && el.offsetHeight > 0
-              ? NodeFilter.FILTER_ACCEPT
-              : NodeFilter.FILTER_SKIP
-          },
-        }
-      )
-      const firstChild = walker.firstChild()
-      if (firstChild) {
-        elementToTrack = firstChild
-      }
-    }
-
-    // Check if we're already registered with the SAME element (StrictMode remount)
-    // If element changed (HMR), we need to re-register
-    if (registrationRef.current.id && registrationRef.current.element === elementToTrack) {
-      logDebug('skipping registration - same element already registered')
-      return
-    }
-
-    // If we had a previous registration with different element, unregister it
-    if (registrationRef.current.id) {
-      unregisterInstance(registrationRef.current.id)
-    }
-
-    const id = registerInstance(meta, props, elementToTrack)
-    registrationRef.current = { id, element: elementToTrack }
-
-    // Set up mutation observer to watch for DOM changes
-    const observer = new MutationObserver(() => {
-      const instance = componentRegistry.get(id)
-      if (instance && instance.element && instance.element.isConnected) {
-        instance.rect = instance.element.getBoundingClientRect()
-      }
-    })
-    observer.observe(elementToTrack, {
-      attributes: true,
-      childList: true,
-      subtree: true,
-      attributeFilter: ['style', 'class'],
-    })
-
-    // Set up resize observer to watch for size changes
-    const resizeObserver = new ResizeObserver(() => {
-      const instance = componentRegistry.get(id)
-      if (instance && instance.element && instance.element.isConnected) {
-        instance.rect = instance.element.getBoundingClientRect()
-      }
-    })
-    resizeObserver.observe(elementToTrack)
+    registerOrUpdateElement(resolveElementToTrack(ref.current))
 
     return () => {
-      observer.disconnect()
-      resizeObserver.disconnect()
-      unregisterInstance(id)
-      registrationRef.current = { id: null, element: null }
+      cleanupInstanceTracking(registrationRef.current, unregisterInstance)
     }
   }, [meta])
 
   useEffect(() => {
-    if (registrationRef.current.id) {
-      updateInstanceProps(registrationRef.current.id, props)
-    }
+    if (!ref.current) return
+
+    // Re-resolve tracked element on prop changes so components that toggle
+    // between null and rendered DOM (e.g. modals) can rebind correctly.
+    registerOrUpdateElement(resolveElementToTrack(ref.current))
   }, [props])
 
   return React.createElement('span', { ref, style: { display: 'contents' } }, children)
@@ -410,4 +372,3 @@ export function withComponentHighlighter(Component, meta) {
 }
 `
 }
-
