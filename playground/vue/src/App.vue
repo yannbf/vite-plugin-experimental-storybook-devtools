@@ -91,7 +91,7 @@ const completedCount = computed(
 
 <template>
   <div>
-    <Header title="TaskFlow" user-name="John Doe" />
+    <Header title="TaskFlow Vue" user-name="John Doe" />
 
     <main class="dashboard">
       <div class="dashboard-header">

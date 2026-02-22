@@ -65,7 +65,7 @@ export const App = () => {
   return (
     <div>
       {/* Header: simple component with no children */}
-      <Header title="TaskFlow" userName="John Doe" />
+      <Header title="TaskFlow React" userName="John Doe" />
 
       <main className="dashboard">
         <div className="dashboard-header">
