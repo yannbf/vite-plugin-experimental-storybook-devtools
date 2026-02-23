@@ -2,7 +2,6 @@
 import type { Plugin, ViteDevServer } from 'vite'
 import { createFilter } from 'vite'
 import type { FrameworkConfig, SerializedProps } from './frameworks'
-import { generateStory } from './utils/story-generator'
 import { defineRpcFunction } from '@vitejs/devtools-kit'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -310,7 +309,7 @@ export function createComponentHighlighterPlugin(
             name: 'component-highlighter:create-story',
             type: 'action',
             setup: () => ({
-              handler: (data: ComponentStoryData) => {
+              handler: async (data: ComponentStoryData) => {
                 console.log(
                   '[DevTools] Create story:',
                   data.meta.componentName,
@@ -355,6 +354,23 @@ export function createComponentHighlighterPlugin(
                       existingContent = fs.readFileSync(outputPath, 'utf-8')
                       console.log(
                         `[DevTools] Appending to existing story file: ${outputPath}`,
+                      )
+                    }
+
+                    // Dynamically import the framework-specific story generator
+                    let generateStory: typeof import('./frameworks/react/story-generator').generateStory
+
+                    if (framework.name === 'react') {
+                      const { generateStory: generateReactStory } =
+                        await import('./frameworks/react/story-generator')
+                      generateStory = generateReactStory
+                    } else if (framework.name === 'vue') {
+                      const { generateStory: generateVueStory } =
+                        await import('./frameworks/vue/story-generator')
+                      generateStory = generateVueStory
+                    } else {
+                      throw new Error(
+                        `Unsupported framework: ${framework.name}`,
                       )
                     }
 

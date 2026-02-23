@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { generateStory, generateStoryName } from './story-generator'
+import { generateStory } from '../frameworks/react/story-generator'
+import { generateStoryName } from './story-generator'
 
 describe('generateStory', () => {
   const baseMeta = {
@@ -80,13 +81,13 @@ describe('generateStory', () => {
       expect(result.content).toContain('export const Submit: Story')
     })
 
-    it('should fallback to Snapshot when no meaningful props', () => {
+    it('should fallback to Default when no meaningful props', () => {
       const result = generateStory({
         meta: baseMeta,
         props: { someRandomProp: 'value' },
       })
 
-      expect(result.content).toContain('export const Snapshot: Story')
+      expect(result.content).toContain('export const Default: Story')
     })
 
     it('should convert story name to valid identifier', () => {
@@ -578,13 +579,13 @@ describe('generateStoryName', () => {
     )
   })
 
-  it('should return Snapshot for empty props', () => {
-    expect(generateStoryName({})).toBe('Snapshot')
+  it('should return Default for empty props', () => {
+    expect(generateStoryName({})).toBe('Default')
   })
 
-  it('should return Snapshot for non-meaningful props', () => {
+  it('should return Default for non-meaningful props', () => {
     expect(generateStoryName({ children: 'text', className: 'btn' })).toBe(
-      'Snapshot',
+      'Default',
     )
   })
 

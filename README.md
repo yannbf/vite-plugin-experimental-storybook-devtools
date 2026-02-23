@@ -199,16 +199,23 @@ For detailed technical documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTU
 │                 │    │                  │    │                 │
 │ • Transform JSX │───▶│ • Runtime HOC    │───▶│ • Component UI  │
 │ • Inject meta   │    │ • Registry       │    │ • RPC Handler   │
-│ • Story gen     │    │ • Serialization  │    │ • Story create  │
+│ • Load FW gen   │    │ • Serialization  │    │ • Story create  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+                             │                           │
+                             ▼                           ▼
+                  ┌──────────────────┐    ┌─────────────────────┐
+                  │ Shared Helpers   │    │ Framework Story Gen │
+                  │ • DOM tracking   │    │ • React generator   │
+                  │ • Observers      │    │ • Vue generator     │
+                  └──────────────────┘    └─────────────────────┘
 ```
 
 ### How It Works
 
-1. **Build-time**: Babel transforms wrap components with `withComponentHighlighter` HOC
+1. **Build-time**: Babel/compiler transforms wrap components with framework-specific HOC
 2. **Runtime**: HOC registers component instances with metadata and props
 3. **Interaction**: Overlay detects mouse events and renders highlights
-4. **Story Creation**: Serialized props are sent via RPC, story files are written to disk
+4. **Story Creation**: Plugin dynamically loads framework-specific story generator, serialized props are sent via RPC, story files are written to disk with framework-specific imports and file extensions
 
 ## 🧪 Development
 
@@ -246,36 +253,40 @@ pnpm typecheck
 
 ```
 ├── src/
-│   ├── index.ts                    # Package entry
-│   ├── create-component-highlighter-plugin.ts  # Main Vite plugin
-│   ├── runtime-helpers.ts          # Shared runtime utilities
+│   ├── index.ts                               # Package entry
+│   ├── create-component-highlighter-plugin.ts # Main Vite plugin
+│   ├── runtime-helpers.ts                     # Shared runtime utilities
 │   ├── frameworks/
-│   │   ├── types.ts                 # Shared framework interfaces
+│   │   ├── types.ts                           # Shared framework interfaces
 │   │   ├── react/
-│   │   │   ├── index.ts             # React framework config
-│   │   │   ├── plugin.ts            # React entry point
-│   │   │   ├── transform.ts         # Babel AST transformation
-│   │   │   └── runtime-module.ts    # Runtime HOC (React)
+│   │   │   ├── index.ts                       # React framework config
+│   │   │   ├── plugin.ts                      # React entry point
+│   │   │   ├── transform.ts                   # Babel AST transformation
+│   │   │   ├── runtime-module.ts              # Runtime HOC (React)
+│   │   │   └── story-generator.ts             # React story generation
 │   │   └── vue/
-│   │       ├── index.ts             # Vue framework config
-│   │       ├── plugin.ts            # Vue entry point
-│   │       ├── transform.ts         # Vue SFC transformation
-│   │       └── runtime-module.ts    # Runtime HOC (Vue)
+│   │       ├── index.ts                       # Vue framework config
+│   │       ├── plugin.ts                      # Vue entry point
+│   │       ├── transform.ts                   # Vue SFC transformation
+│   │       ├── runtime-module.ts              # Runtime wrapper (Vue)
+│   │       └── story-generator.ts             # Vue story generation
 │   ├── client/
-│       ├── overlay.ts              # UI overlay
-│       ├── listeners.ts            # Event handlers
-│       └── vite-devtools.ts        # DevTools dock
+│   │   ├── overlay.ts                         # UI overlay
+│   │   ├── listeners.ts                       # Event handlers
+│   │   └── vite-devtools.ts                   # DevTools dock
 │   └── utils/
-│       ├── story-generator.ts      # Story file generation
-│       └── provider-analyzer.ts    # Provider detection
-├── tests/                          # Unit tests
-├── e2e/                            # E2E tests
-└── playground/                     # Development app
+│       ├── story-generator.ts                 # Shared story utilities
+│       └── provider-analyzer.ts               # Provider detection
+├── tests/                                     # Unit tests
+├── e2e/                                       # E2E tests
+└── playground/                                # Development apps
+    ├── react/                                 # React test app
+    └── vue/                                   # Vue test app
 ```
 
 ## ⚠️ Limitations
 
-- **React only** - Currently supports React function components (not class components)
+- **React & Vue** - Currently supports React and Vue (other frameworks coming soon)
 - **Development only** - Disabled in production builds by default
 - **Vite DevTools required** - Needs `@vitejs/devtools` for full functionality
 - **Provider dependencies** - Components requiring context providers may need Storybook decorators

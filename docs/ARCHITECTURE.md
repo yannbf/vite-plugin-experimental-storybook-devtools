@@ -64,10 +64,10 @@ import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/re
 │                                                        │                    │
 │                                                        ▼                    │
 │                                             ┌──────────────────────────┐    │
-│                                             │   story-generator.ts     │    │
-│                                             │   - Generate .stories.tsx│    │
-│                                             │   - Handle JSX props     │    │
-│                                             │   - Resolve imports      │    │
+│                                             │ Framework-Specific       │    │
+│                                             │ Story Generators         │    │
+│                                             │ - react/story-generator  │    │
+│                                             │ - vue/story-generator    │    │
 │                                             └──────────────────────────┘    │
 │                                                        │                    │
 │                                                        ▼                    │
@@ -93,7 +93,8 @@ import componentHighlighter from 'vite-plugin-experimental-storybook-devtools/re
 - Handle `/__component-highlighter/check-story` endpoint
 - Handle `/__open-in-editor` endpoint
 - Serve runtime virtual modules (dev TS with HMR, build JS from `dist`)
-- Invoke `utils/story-generator.ts` to create story files
+- Dynamically load framework-specific story generator (`frameworks/{framework}/story-generator.ts`)
+- Invoke framework story generator to create story files
 - Send WebSocket notifications on story creation
 
 **RPC Methods**:
@@ -218,34 +219,70 @@ interface ComponentInstance {
 - Handle story creation success/failure feedback
 - Listen for `component-highlighter:story-created` WebSocket events
 
-### 8. `utils/story-generator.ts` (Server-Side)
+### 8. Framework-Specific Story Generators (Server-Side)
 
-**Purpose**: Generate Storybook `.stories.tsx` file content.
+**Purpose**: Generate framework-specific Storybook story file content.
+
+**Architecture**: 
+- **Shared base utilities** in `utils/story-generator.ts`:
+  - Shared helper functions (formatting, parsing, type guards)
+  - `generateStoryName()`, `generateArgsContent()`, `formatPropValue()`
+  - `collectComponentRefs()`, `extractComponentNamesFromJSXSource()`
+  - Framework-agnostic prop serialization and formatting
+
+- **Framework-specific generators**:
+  - `frameworks/react/story-generator.ts` - React-specific story generation
+  - `frameworks/vue/story-generator.ts` - Vue-specific story generation
+  - Each implements `generateStory(data: StoryGenerationData): GeneratedStory`
 
 **Key Responsibilities**:
-- Generate story file content with proper imports
-- Handle JSX props serialization to code
+- Generate story file content with framework-specific imports
+- Use correct Storybook package (`@storybook/react-vite` vs `@storybook/vue3-vite`)
+- Use correct file extension (`.stories.tsx` for React, `.stories.ts` for Vue)
+- Handle framework-specific import paths (`.vue` extension for Vue, none for React)
 - Resolve component imports from registry
 - Format prop values (primitives, objects, arrays, JSX, functions)
 - Generate unique story names (avoid duplicates)
 - Append stories to existing files
 - Add `fn()` import for function props
 
-**Generated Story Structure**:
+**Generated Story Structure (React)**:
 ```typescript
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import MyButton from './MyButton';
-import Icon from './Icon';
+import { MyButton } from './MyButton';
+import { Icon } from './Icon';
 
-const meta = {
-  title: 'Components/MyButton',
+const meta: Meta<typeof MyButton> = {
   component: MyButton,
-} satisfies Meta<typeof MyButton>;
+};
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof MyButton>;
+
+export const Primary: Story = {
+  args: {
+    label: 'Click me',
+    icon: <Icon name="star" />,
+    onClick: fn(),
+  },
+};
+```
+
+**Generated Story Structure (Vue)**:
+```typescript
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import MyButton from './MyButton.vue';  // Note: .vue extension
+import Icon from './Icon.vue';
+
+const meta: Meta<typeof MyButton> = {
+  component: MyButton,
+};
+
+export default meta;
+type Story = StoryObj<typeof MyButton>;
 
 export const Primary: Story = {
   args: {
@@ -287,8 +324,9 @@ export const Primary: Story = {
 4. overlay.ts emits 'log-info' event with serialized data
 5. vite-devtools.ts receives event, calls RPC
 6. component-highlighter-plugin.ts receives RPC call
-7. utils/story-generator.ts generates story content
-8. Plugin writes file to disk
+7. Plugin dynamically imports framework-specific story generator
+8. Framework story generator creates story content with framework-specific settings
+9. Plugin writes file to disk
 9. Plugin sends WebSocket notification
 10. vite-devtools.ts shows success feedback
 11. overlay.ts updates UI (enables "Open Stories" button)
@@ -355,11 +393,18 @@ src/
 ├── frameworks/                   # Multi-framework support
 │   ├── types.ts                  # Shared interfaces (ComponentMeta, etc.)
 │   ├── index.ts                  # Type exports only
-│   └── react/                    # React-specific implementation
-│       ├── index.ts              # React framework config
-│       ├── plugin.ts             # React entry point: import from '/react'
-│       ├── transform.ts          # Babel AST transformation
-│       └── runtime-module.ts     # HOC and serialization runtime
+│   ├── react/                    # React-specific implementation
+│   │   ├── index.ts              # React framework config
+│   │   ├── plugin.ts             # React entry point: import from '/react'
+│   │   ├── transform.ts          # Babel AST transformation
+│   │   ├── runtime-module.ts     # HOC and serialization runtime
+│   │   └── story-generator.ts    # React story generation (.stories.tsx)
+│   └── vue/                      # Vue-specific implementation
+│       ├── index.ts              # Vue framework config
+│       ├── plugin.ts             # Vue entry point: import from '/vue'
+│       ├── transform.ts          # Vue AST transformation
+│       ├── runtime-module.ts     # Vue wrapper runtime
+│       └── story-generator.ts    # Vue story generation (.stories.ts, .vue imports)
 │
 ├── client/                       # Framework-agnostic client code
 │   ├── overlay.ts                # UI overlay and context menu
@@ -367,7 +412,7 @@ src/
 │   └── vite-devtools.ts          # DevTools dock client
 │
 └── utils/                        # Utility functions
-    ├── story-generator.ts        # Story file generation
+    ├── story-generator.ts        # Shared story generation utilities
     └── provider-analyzer.ts      # Provider dependency detection
 
 tests/
@@ -378,7 +423,10 @@ e2e/
 └── component-highlighter.spec.ts # Playwright E2E tests
 
 playground/
-└── src/                          # Test app for development
+├── react/                        # React test app
+│   └── src/
+└── vue/                          # Vue test app
+    └── src/
 ```
 
 ### Framework Architecture
@@ -412,8 +460,8 @@ The codebase is structured for multi-framework support:
 │  ├──────────────┤       ├──────────────┤       ├──────────────┤     │
 │  │ transform.ts │       │ transform.ts │       │ transform.ts │     │
 │  │ runtime-     │       │ runtime-     │       │ runtime-     │     │
-│  │ module.ts    │       │ module.ts    │       │ module.ts    │     │
-│  │ index.ts     │       │ index.ts     │       │ index.ts     │     │
+│  │ module.ts    │       │ module.ts    │       │ module.ts    │     │  │  │ story-       │       │ story-       │       │ story-       │     │
+  │  │ generator.ts │       │ generator.ts │       │ generator.ts │     ││  │ index.ts     │       │ index.ts     │       │ index.ts     │     │
 │  └──────────────┘       └──────────────┘       └──────────────┘     │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
@@ -433,21 +481,39 @@ interface FrameworkConfig {
 }
 ```
 
-**Adding a New Framework** (e.g., Vue):
-1. Create `src/frameworks/vue/` directory
-2. Implement `transform.ts` with Vue-specific AST transformation
-3. Implement `runtime-module.ts` with Vue-specific wrapper runtime
-4. Create `index.ts` exporting a `FrameworkConfig`
-5. Create `plugin.ts` as the entry point:
+**Adding a New Framework** (e.g., Svelte):
+1. Create `src/frameworks/svelte/` directory
+2. Implement `transform.ts` with Svelte-specific AST transformation
+3. Implement `runtime-module.ts` with Svelte-specific wrapper runtime
+4. Implement `story-generator.ts` with Svelte-specific story generation:
+   - Use `@storybook/svelte-vite` for Storybook imports
+   - Use `.stories.ts` or `.stories.js` file extension
+   - Handle `.svelte` import extensions
+   - Format props for Svelte syntax
+5. Create `index.ts` exporting a `FrameworkConfig`:
    ```typescript
-   import { createComponentHighlighterPlugin } from '../../create-component-highlighter-plugin'
-   import { vueFramework } from '.'
-
-   export default function componentHighlighterVue(options = {}) {
-     return createComponentHighlighterPlugin(vueFramework, options)
+   export const svelteFramework: FrameworkConfig = {
+     name: 'svelte',
+     displayName: 'Svelte',
+     extensions: ['.svelte'],
+     detect: detectSvelte,
+     transform,
+     runtimeModuleFile: 'frameworks/svelte/runtime-module',
+     virtualModuleId: 'virtual:component-highlighter/runtime',
+     storybookFramework: '@storybook/svelte-vite',
    }
    ```
-6. Add entry to `tsdown.config.ts` and `package.json` exports
+6. Create `plugin.ts` as the entry point:
+   ```typescript
+   import { createComponentHighlighterPlugin } from '../../create-component-highlighter-plugin'
+   import { svelteFramework } from '.'
+
+   export default function componentHighlighterSvelte(options = {}) {
+     return createComponentHighlighterPlugin(svelteFramework, options)
+   }
+   ```
+7. Add entries to `tsdown.config.ts` for building runtime and story generator
+8. Add to `package.json` exports for plugin entry point
 
 ## Configuration Options
 

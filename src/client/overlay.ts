@@ -528,9 +528,6 @@ function clearAllHighlights() {
   highlightElements.clear()
 }
 
-// Store current context menu's component path for updates
-let currentContextMenuComponentPath: string | null = null
-
 let wasOverlayEnabledBeforeRecording = false
 let wasHighlightAllActiveBeforeRecording = false
 
@@ -601,15 +598,19 @@ function emitCreateStory(
 
   const playCode = includePlayFunction ? getPlayFunctionCode() : null
 
-  const componentInfo: Parameters<typeof overlayEvents.emit<'log-info'>>[1] = {
+  const componentInfoBase = {
     meta: data.meta,
     props: data.props,
-    serializedProps: data.serializedProps,
     componentRegistry: componentRegistryObj,
     storyName: data.storyName,
     ...(playCode
       ? { playFunction: playCode.playLines, playImports: playCode.imports }
       : {}),
+  }
+
+  const componentInfo: Parameters<typeof overlayEvents.emit<'log-info'>>[1] = {
+    ...componentInfoBase,
+    ...(data.serializedProps ? { serializedProps: data.serializedProps } : {}),
   }
 
   console.log('[component-highlighter] Emitting story creation payload', {
@@ -636,9 +637,6 @@ async function showContextMenu(
 
   // Check if story file exists
   const storyInfo = await checkStoryFile(meta.filePath)
-
-  // Store for potential updates
-  currentContextMenuComponentPath = meta.filePath
 
   contextMenuElement = document.createElement('div')
   contextMenuElement.setAttribute(UI_MARKER, 'true')
@@ -848,15 +846,15 @@ async function showContextMenu(
     }
 
     const storyName = storyNameInput.value.trim() || suggestedName
-    emitCreateStory(
-      {
-        meta,
-        props,
-        serializedProps,
-        storyName,
-      },
-      false,
-    )
+    const createStoryPayload: Parameters<typeof emitCreateStory>[0] = {
+      meta,
+      props,
+      storyName,
+    }
+    if (serializedProps) {
+      createStoryPayload.serializedProps = serializedProps
+    }
+    emitCreateStory(createStoryPayload, false)
 
     saveStoryBtn.textContent = 'Saving...'
     saveStoryBtn.disabled = true
@@ -892,15 +890,15 @@ async function showContextMenu(
         },
       )
 
-      emitCreateStory(
-        {
-          meta,
-          props,
-          serializedProps,
-          storyName,
-        },
-        true,
-      )
+      const createStoryPayload2: Parameters<typeof emitCreateStory>[0] = {
+        meta,
+        props,
+        storyName,
+      }
+      if (serializedProps) {
+        createStoryPayload2.serializedProps = serializedProps
+      }
+      emitCreateStory(createStoryPayload2, true)
 
       resumeHighlightingAfterRecording()
     })
@@ -940,7 +938,6 @@ function hideContextMenu() {
     document.removeEventListener('keydown', currentEscapeHandler)
     currentEscapeHandler = null
   }
-  currentContextMenuComponentPath = null
 }
 
 // Hover menu management
