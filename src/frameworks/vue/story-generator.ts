@@ -18,6 +18,124 @@ import {
   escapeRegex,
 } from '../../utils/story-generator'
 
+function splitVueSlotArgs(props: SerializedProps): {
+  componentArgs: SerializedProps
+  slotArgs: Record<string, unknown>
+} {
+  const componentArgs: SerializedProps = {}
+  const slotArgs: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(props)) {
+    if (key.startsWith('slot:')) {
+      slotArgs[key] = value
+    } else {
+      componentArgs[key] = value
+    }
+  }
+
+  return { componentArgs, slotArgs }
+}
+
+function isSerializedVueSlot(
+  value: unknown,
+): value is { __isVueSlot: true; source: string; componentRefs: string[] } {
+  if (!value || typeof value !== 'object') return false
+
+  const slot = value as {
+    __isVueSlot?: unknown
+    source?: unknown
+    componentRefs?: unknown
+  }
+
+  return (
+    slot.__isVueSlot === true &&
+    typeof slot.source === 'string' &&
+    Array.isArray(slot.componentRefs)
+  )
+}
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function collectVueSlotComponentRefs(
+  slotArgs: Record<string, unknown>,
+  refs: Set<string>,
+): void {
+  for (const slotValue of Object.values(slotArgs)) {
+    if (!isSerializedVueSlot(slotValue)) continue
+    for (const ref of slotValue.componentRefs) {
+      if (ref) refs.add(ref)
+    }
+  }
+}
+
+function buildVueSlotTemplate(slotArgs: Record<string, unknown>): string {
+  const slotEntries = Object.entries(slotArgs)
+    .map(([key, value]) => [key.slice('slot:'.length), value] as const)
+    .filter(([slotName]) => Boolean(slotName))
+
+  if (slotEntries.length === 0) {
+    return ''
+  }
+
+  const defaultEntry = slotEntries.find(([slotName]) => slotName === 'default')
+  const namedEntries = slotEntries
+    .filter(([slotName]) => slotName !== 'default')
+    .sort(([a], [b]) => a.localeCompare(b))
+
+  const parts: string[] = []
+
+  if (defaultEntry) {
+    const slotValue = defaultEntry[1]
+    if (isSerializedVueSlot(slotValue)) {
+      parts.push(slotValue.source)
+    } else if (typeof slotValue === 'string' && slotValue.trim()) {
+      parts.push(escapeHtmlText(slotValue))
+    }
+  }
+
+  for (const [slotName, slotValue] of namedEntries) {
+    if (isSerializedVueSlot(slotValue)) {
+      parts.push(`<template #${slotName}>${slotValue.source}</template>`)
+    } else if (typeof slotValue === 'string' && slotValue.trim()) {
+      parts.push(
+        `<template #${slotName}>${escapeHtmlText(slotValue)}</template>`,
+      )
+    }
+  }
+
+  return parts.join('')
+}
+
+function buildVueRenderContent(
+  componentName: string,
+  slotArgs: Record<string, unknown>,
+  slotComponentRefs: string[],
+): string {
+  const slotTemplate = buildVueSlotTemplate(slotArgs)
+  if (!slotTemplate) {
+    return ''
+  }
+
+  const allComponents = [componentName, ...slotComponentRefs].join(', ')
+
+  return `
+  render: (args) => ({
+    components: { ${allComponents} },
+    setup() {
+      const componentArgs = Object.fromEntries(
+        Object.entries(args).filter(([key]) => !key.startsWith('slot:')),
+      );
+      return { componentArgs };
+    },
+    template: \`<${componentName} v-bind="componentArgs">${slotTemplate}</${componentName}>\`,
+  }),`
+}
+
 /**
  * Generate a Vue story file from component data
  * Vue-specific: imports include .vue extension, uses @storybook/vue3-vite
@@ -47,9 +165,12 @@ export function generateStory(data: StoryGenerationData): GeneratedStory {
   let storyName = customStoryName || generateStoryName(props)
   storyName = toValidStoryName(storyName)
 
+  const { componentArgs, slotArgs } = splitVueSlotArgs(props)
+
   // Collect component references
   const componentRefs = new Set<string>()
-  collectComponentRefs(props, componentRefs)
+  collectComponentRefs(componentArgs, componentRefs)
+  collectVueSlotComponentRefs(slotArgs, componentRefs)
 
   // Build imports
   const imports: Array<{ name: string; path: string }> = []
@@ -73,7 +194,7 @@ export function generateStory(data: StoryGenerationData): GeneratedStory {
           ? refRelativePath
           : `${refRelativePath}.vue`
         imports.push({
-          name: `{ ${refName} }`,
+          name: refName,
           path: refImportPath,
         })
       }
@@ -151,7 +272,9 @@ function generateStoryContent(options: {
     playImports,
   } = options
 
-  const needsFnImport = hasAnyFunctionProps(props)
+  const { componentArgs, slotArgs } = splitVueSlotArgs(props)
+
+  const needsFnImport = hasAnyFunctionProps(componentArgs)
 
   // Collect storybook/test imports
   const storybookTestNames = new Set<string>()
@@ -176,8 +299,22 @@ function generateStoryContent(options: {
     ...imports.map((imp) => `import ${imp.name} from '${imp.path}';`),
   ].join('\n')
 
-  const argsContent = generateArgsContent(props, 1, options.componentRegistry)
-  const hasArgs = Object.keys(props).length > 0
+  const argsContent = generateArgsContent(
+    componentArgs,
+    1,
+    options.componentRegistry,
+  )
+  const hasArgs = Object.keys(componentArgs).length > 0
+
+  // Collect slot component refs for the render function
+  const slotComponentRefs = new Set<string>()
+  collectVueSlotComponentRefs(slotArgs, slotComponentRefs)
+
+  const renderContent = buildVueRenderContent(
+    componentName,
+    slotArgs,
+    [...slotComponentRefs].sort((a, b) => a.localeCompare(b)),
+  )
   const hasPlay = playFunction && playFunction.length > 0
   const playContent = hasPlay
     ? `\n${formatPlayFunctionForStory(playFunction!)}`
@@ -192,7 +329,7 @@ const meta: Meta<typeof ${componentName}> = {
 export default meta;
 type Story = StoryObj<typeof ${componentName}>;
 
-export const ${storyName}: Story = {${hasArgs ? `\n  args: ${argsContent},` : ''}${playContent}
+export const ${storyName}: Story = {${renderContent}${hasArgs ? `\n  args: ${argsContent},` : ''}${playContent}
 };
 `
 }
@@ -218,6 +355,7 @@ function appendStoryToExisting(options: {
     playFunction,
     playImports,
   } = options
+  const { componentArgs, slotArgs } = splitVueSlotArgs(props)
 
   let finalStoryName = storyName
   const storyExportRegex = /export\s+const\s+(\w+)\s*[=:]/g
@@ -240,7 +378,7 @@ function appendStoryToExisting(options: {
   let updatedContent = existingContent
 
   // Handle fn import
-  const needsFnImport = hasAnyFunctionProps(props)
+  const needsFnImport = hasAnyFunctionProps(componentArgs)
   if (needsFnImport && !existingContent.includes("from 'storybook/test'")) {
     const lastImportMatch = updatedContent.match(
       /^(import\s+.+from\s+['"][^'"]+['"];?\s*\n)+/m,
@@ -341,14 +479,28 @@ function appendStoryToExisting(options: {
   }
 
   // Generate new story
-  const argsContent = generateArgsContent(props, 1, options.componentRegistry)
-  const hasArgs = Object.keys(props).length > 0
+  const argsContent = generateArgsContent(
+    componentArgs,
+    1,
+    options.componentRegistry,
+  )
+  const hasArgs = Object.keys(componentArgs).length > 0
+
+  // Collect slot component refs for the render function
+  const slotComponentRefs = new Set<string>()
+  collectVueSlotComponentRefs(slotArgs, slotComponentRefs)
+
+  const renderContent = buildVueRenderContent(
+    options.componentName,
+    slotArgs,
+    [...slotComponentRefs].sort((a, b) => a.localeCompare(b)),
+  )
   const hasPlay = playFunction && playFunction.length > 0
   const playContent = hasPlay
     ? `\n${formatPlayFunctionForStory(playFunction!)}`
     : ''
   const newStory = `
-export const ${finalStoryName}: Story = {${hasArgs ? `\n  args: ${argsContent},` : ''}${playContent}
+export const ${finalStoryName}: Story = {${renderContent}${hasArgs ? `\n  args: ${argsContent},` : ''}${playContent}
 };
 `
 

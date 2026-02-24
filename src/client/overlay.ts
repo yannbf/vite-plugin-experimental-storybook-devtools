@@ -670,6 +670,21 @@ async function showContextMenu(
         const jsxValue = value as unknown as { __isJSX: true; source: string }
         return `<div style="font-family: monospace; background: #1e3a5f; color: #93c5fd; padding: 2px 6px; border-radius: 3px; margin: 2px; display: inline-block; font-size: 12px;" title="${escapeHtml(jsxValue.source)}">${key}=&lt;JSX&gt;</div>`
       }
+      // Check if this is a serialized Vue slot value
+      if (
+        value &&
+        typeof value === 'object' &&
+        '__isVueSlot' in value &&
+        (value as { __isVueSlot: boolean }).__isVueSlot
+      ) {
+        const vueSlotValue = value as unknown as {
+          __isVueSlot: true
+          source: string
+        }
+        // Extract slot name from key (format is "slot:default" -> "default")
+        const slotName = key.startsWith('slot:') ? key.slice(5) : key
+        return `<div style="font-family: monospace; background: #064e3b; color: #6ee7b7; padding: 2px 6px; border-radius: 3px; margin: 2px; display: inline-block; font-size: 12px;" title="${escapeHtml(vueSlotValue.source)}">${slotName}=&lt;slot&gt;</div>`
+      }
       // Check if this is a function placeholder
       if (value && typeof value === 'object' && '__isFunction' in value) {
         return `<div style="font-family: monospace; background: #4a3728; color: #fbbf24; padding: 2px 6px; border-radius: 3px; margin: 2px; display: inline-block; font-size: 12px;">${key}=&lt;fn&gt;</div>`

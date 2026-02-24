@@ -11,6 +11,7 @@ import {
   findFirstTrackableElement,
   syncInstanceTracking,
 } from 'virtual:component-highlighter/runtime-helpers'
+import { serializeVNodeToTemplate } from './vnode-to-template'
 
 // Injected by the virtual module loader.
 declare const __COMPONENT_HIGHLIGHTER_DEBUG__: boolean
@@ -58,6 +59,146 @@ function serializeProps(props: Record<string, unknown>) {
   }
 
   return serialized
+}
+
+function toListenerPropName(eventName: string): string {
+  if (!eventName) return 'onUnknown'
+  return `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`
+}
+
+function extractDeclaredEmitNames(instance: {
+  type?: { emits?: unknown }
+}): Set<string> {
+  const names = new Set<string>()
+  const emits = instance.type?.emits
+
+  if (Array.isArray(emits)) {
+    for (const eventName of emits) {
+      if (typeof eventName === 'string' && eventName) {
+        names.add(eventName)
+      }
+    }
+    return names
+  }
+
+  if (emits && typeof emits === 'object') {
+    for (const key of Object.keys(emits as Record<string, unknown>)) {
+      if (key) names.add(key)
+    }
+  }
+
+  return names
+}
+
+function extractListenerProps(instance: {
+  vnode?: { props?: Record<string, unknown> | null }
+}): Record<string, unknown> {
+  const listenerProps: Record<string, unknown> = {}
+  const vnodeProps = instance.vnode?.props ?? {}
+
+  for (const [key, value] of Object.entries(vnodeProps)) {
+    if (!key.startsWith('on')) continue
+    if (key.length <= 2) continue
+    if (key === 'onVnodeBeforeMount' || key === 'onVnodeMounted') continue
+    if (
+      key === 'onVnodeBeforeUpdate' ||
+      key === 'onVnodeUpdated' ||
+      key === 'onVnodeBeforeUnmount' ||
+      key === 'onVnodeUnmounted'
+    ) {
+      continue
+    }
+
+    listenerProps[key] = value
+  }
+
+  return listenerProps
+}
+
+function extractSlotArgs(instance: {
+  slots?: Record<string, ((props?: unknown) => unknown) | undefined>
+  proxy?: {
+    $slots?: Record<string, ((props?: unknown) => unknown) | undefined>
+  }
+}): Record<string, unknown> {
+  const slotArgs: Record<string, unknown> = {}
+  const slots = instance.slots ?? instance.proxy?.$slots ?? {}
+
+  for (const [slotName, slotFn] of Object.entries(slots)) {
+    if (!slotName || slotName.startsWith('_')) continue
+    if (typeof slotFn !== 'function') continue
+
+    try {
+      const slotResult = slotFn({})
+      const { source, componentRefs } = serializeVNodeToTemplate(
+        slotResult,
+        serializeValue,
+      )
+
+      slotArgs[`slot:${slotName}`] = source
+        ? {
+            __isVueSlot: true,
+            source,
+            componentRefs,
+          }
+        : slotName === 'default'
+          ? 'Default slot content'
+          : `${slotName} slot content`
+    } catch {
+      // Ignore slot evaluation errors and still expose slot control.
+      slotArgs[`slot:${slotName}`] =
+        slotName === 'default'
+          ? 'Default slot content'
+          : `${slotName} slot content`
+    }
+  }
+
+  return slotArgs
+}
+
+function getStoryProps(
+  instance: {
+    type?: { emits?: unknown }
+    vnode?: { props?: Record<string, unknown> | null }
+    slots?: Record<string, ((props?: unknown) => unknown) | undefined>
+    proxy?: {
+      $slots?: Record<string, ((props?: unknown) => unknown) | undefined>
+    }
+  },
+  rawProps: Record<string, unknown>,
+): Record<string, unknown> {
+  const storyProps: Record<string, unknown> = { ...rawProps }
+
+  const slotArgs = extractSlotArgs(instance)
+  for (const [slotKey, slotValue] of Object.entries(slotArgs)) {
+    if (!(slotKey in storyProps)) {
+      storyProps[slotKey] = slotValue
+    }
+  }
+
+  const declaredEmits = extractDeclaredEmitNames(instance)
+  const listenerProps = extractListenerProps(instance)
+
+  for (const [listenerName, listenerValue] of Object.entries(listenerProps)) {
+    if (!(listenerName in storyProps)) {
+      storyProps[listenerName] = listenerValue
+    }
+
+    if (listenerName.length > 2) {
+      const eventName =
+        listenerName.charAt(2).toLowerCase() + listenerName.slice(3)
+      if (eventName) declaredEmits.add(eventName)
+    }
+  }
+
+  for (const eventName of declaredEmits) {
+    const listenerPropName = toListenerPropName(eventName)
+    if (!(listenerPropName in storyProps)) {
+      storyProps[listenerPropName] = () => undefined
+    }
+  }
+
+  return storyProps
 }
 
 /**
@@ -245,11 +386,12 @@ export function withComponentHighlighter(meta: Record<string, unknown>) {
     }
 
     const props = instance.proxy?.$props || {}
+    const storyProps = getStoryProps(instance, props)
 
     syncInstanceTracking({
       state: registration,
       element,
-      props,
+      props: storyProps,
       register: (nextElement: Element, nextProps: Record<string, unknown>) =>
         registerInstance(meta, nextProps, nextElement),
       unregister: unregisterInstance,
