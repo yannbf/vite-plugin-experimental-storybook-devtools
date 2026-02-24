@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "storybook": "storybook dev -p 6006",
+    "storybook": "STORYBOOK=true storybook dev -p 6006",
     "preview": "vite preview"
   },
   "devDependencies": {

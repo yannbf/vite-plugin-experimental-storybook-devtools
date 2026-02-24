@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+/// <reference types="vite/client" />
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -21,10 +22,12 @@ const dirname =
 export default defineConfig({
   plugins: [
     react(),
-    DevTools(),
-    componentHighlighter({
-      debugMode: true,
-    }),
+    process.env.STORYBOOK ? null : DevTools(),
+    process.env.STORYBOOK
+      ? null
+      : componentHighlighter({
+          debugMode: true,
+        }),
   ].filter(Boolean),
   build: {
     rolldownOptions: {

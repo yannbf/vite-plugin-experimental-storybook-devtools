@@ -21,10 +21,12 @@ const dirname =
 export default defineConfig({
   plugins: [
     vue(),
-    DevTools(),
-    componentHighlighter({
-      debugMode: true,
-    }),
+    process.env.STORYBOOK ? null : DevTools(),
+    process.env.STORYBOOK
+      ? null
+      : componentHighlighter({
+          debugMode: true,
+        }),
   ].filter(Boolean),
   build: {
     rolldownOptions: {
