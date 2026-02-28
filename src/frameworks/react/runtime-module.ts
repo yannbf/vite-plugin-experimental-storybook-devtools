@@ -502,6 +502,37 @@ function createStableHash(data: string): string {
   return Math.abs(hash).toString(36)
 }
 
+type SourceMeta = {
+  componentName: string
+  filePath: string
+  relativeFilePath: string
+  sourceId: string
+  isDefaultExport: boolean
+}
+
+const sourceMetaByName = new Map<string, SourceMeta>()
+const sourceMetaByType = new WeakMap<object, SourceMeta>()
+
+export function registerComponentSource(
+  componentOrName: unknown,
+  meta: SourceMeta,
+) {
+  if (!meta?.componentName) return
+
+  sourceMetaByName.set(meta.componentName, meta)
+
+  if (
+    componentOrName &&
+    (typeof componentOrName === 'function' || typeof componentOrName === 'object')
+  ) {
+    sourceMetaByType.set(componentOrName as object, meta)
+  }
+
+  if (typeof window !== 'undefined') {
+    window.requestAnimationFrame(() => scanFiberTreeForInstances())
+  }
+}
+
 const autoRegistry = new Map<string, { fiber: unknown }>()
 
 function findReactFiberKey(element: Element): string | undefined {
@@ -527,6 +558,17 @@ function findHostElementFromFiber(fiber: any): Element | null {
   return null
 }
 
+function findNearestHostFromFiber(fiber: any): Element | null {
+  let current = fiber?.return
+  while (current) {
+    if (current.tag === 5 && current.stateNode instanceof Element) {
+      return current.stateNode
+    }
+    current = current.return
+  }
+  return null
+}
+
 function getFiberDisplayName(fiber: any): string {
   const fromType = fiber?.elementType || fiber?.type
   return (
@@ -538,30 +580,45 @@ function getFiberDisplayName(fiber: any): string {
   )
 }
 
-function registerOrUpdateAutoInstance(fiber: any) {
-  const componentName = getFiberDisplayName(fiber)
-  if (!componentName || componentName === 'Unknown') return null
+function getMetaForFiber(fiber: any): SourceMeta {
+  const typeRef = (fiber?.elementType || fiber?.type) as object | undefined
+  const byType = typeRef ? sourceMetaByType.get(typeRef) : undefined
+  if (byType) return byType
 
-  const props = (fiber?.memoizedProps || {}) as Record<string, unknown>
+  const componentName = getFiberDisplayName(fiber)
+  const byName = sourceMetaByName.get(componentName)
+  if (byName) return byName
+
   const debugSource = fiber?._debugSource
   const filePath =
     (debugSource?.fileName as string | undefined) ||
     (fiber?._debugOwner?._debugSource?.fileName as string | undefined) ||
     'unknown'
-  const sourceId = createStableHash(`${filePath}:${componentName}`)
-  const instanceId = `${sourceId}:${fiber?._debugID || fiber?._mountOrder || componentName}`
-  const element = findHostElementFromFiber(fiber)
 
-  if (!element) return null
-
-  const meta = {
+  return {
     componentName,
     filePath,
     relativeFilePath: filePath,
-    sourceId,
+    sourceId: createStableHash(`${filePath}:${componentName}`),
     isDefaultExport: false,
   }
+}
 
+function getElementStablePart(element: Element): string {
+  const text = element.textContent || ''
+  return `${element.tagName}:${element.className}:${text.slice(0, 32)}`
+}
+
+function registerOrUpdateAutoInstance(fiber: any) {
+  const meta = getMetaForFiber(fiber)
+  if (!meta.componentName || meta.componentName === 'Unknown') return null
+
+  const props = (fiber?.memoizedProps || {}) as Record<string, unknown>
+  const element = findHostElementFromFiber(fiber) || findNearestHostFromFiber(fiber)
+
+  if (!element) return null
+
+  const instanceId = `${meta.sourceId}:${createStableHash(getElementStablePart(element))}`
   const existing = componentRegistry.get(instanceId)
   const serializedProps = serializeProps(props)
 
@@ -592,10 +649,42 @@ function registerOrUpdateAutoInstance(fiber: any) {
   return instanceId
 }
 
+function ensureAppFallbackInstance(seen: Set<string>) {
+  const appMeta = sourceMetaByName.get('App')
+  if (!appMeta) return
+
+  const alreadyTracked = Array.from(componentRegistry.values()).some(
+    (instance) => instance.meta.componentName === 'App',
+  )
+  if (alreadyTracked) return
+
+  const instanceId = `${appMeta.sourceId}:app-root`
+  const props: Record<string, unknown> = {}
+  const serializedProps = serializeProps(props)
+
+  const instance = {
+    id: instanceId,
+    meta: appMeta,
+    props,
+    serializedProps,
+    element: document.body,
+  }
+
+  componentRegistry.set(instanceId, instance)
+  autoRegistry.set(instanceId, { fiber: null })
+  seen.add(instanceId)
+
+  const event = new CustomEvent('component-highlighter:register', {
+    detail: instance,
+  })
+  window.dispatchEvent(event)
+}
+
 function scanFiberTreeForInstances() {
   if (typeof document === 'undefined') return
 
   const seen = new Set<string>()
+  const scannedRoots = new Set<any>()
   const containers = Array.from(document.querySelectorAll('*')) as Element[]
 
   for (const element of containers) {
@@ -607,12 +696,26 @@ function scanFiberTreeForInstances() {
 
     if (!startFiber) continue
 
-    const stack = [startFiber]
+    let rootFiber = startFiber
+    while (rootFiber?.return) {
+      rootFiber = rootFiber.return
+    }
+
+    if (!rootFiber || scannedRoots.has(rootFiber)) continue
+    scannedRoots.add(rootFiber)
+
+    const stack = [rootFiber]
     while (stack.length > 0) {
       const fiber = stack.pop()
       if (!fiber) continue
 
-      const isComposite = fiber.tag === 0 || fiber.tag === 1 || fiber.tag === 11 || fiber.tag === 14
+      const isComposite =
+        fiber.tag === 0 || // FunctionComponent
+        fiber.tag === 1 || // ClassComponent
+        fiber.tag === 11 || // ForwardRef
+        fiber.tag === 14 || // MemoComponent
+        fiber.tag === 15 // SimpleMemoComponent
+
       if (isComposite) {
         const id = registerOrUpdateAutoInstance(fiber)
         if (id) seen.add(id)
@@ -622,6 +725,8 @@ function scanFiberTreeForInstances() {
       if (fiber.sibling) stack.push(fiber.sibling)
     }
   }
+
+  ensureAppFallbackInstance(seen)
 
   for (const id of Array.from(autoRegistry.keys())) {
     if (!seen.has(id)) {
