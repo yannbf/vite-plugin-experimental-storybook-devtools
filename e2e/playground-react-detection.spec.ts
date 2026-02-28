@@ -118,8 +118,4 @@ test.describe('React playground detection coverage', () => {
 
 })
 
-registerCommonHighlighterSuite(test as any, {
-  framework: 'react',
-  targetComponent: 'TaskList',
-  interactionComponent: 'TaskForm',
-})
+registerCommonHighlighterSuite(test as any)

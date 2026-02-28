@@ -73,14 +73,10 @@ test.describe('Vue playground detection coverage', () => {
     expect(snapshot).toBeTruthy()
     expect(snapshot?.hasUnknownFilePath).toBe(false)
     expect(snapshot?.uniqueNames).toEqual(
-      expect.arrayContaining(['Form', 'Input', 'Select']),
+      expect.arrayContaining(['TaskForm', 'Input', 'Select']),
     )
   })
 
 })
 
-registerCommonHighlighterSuite(test as any, {
-  framework: 'vue',
-  targetComponent: 'TaskList',
-  interactionComponent: 'Form',
-})
+registerCommonHighlighterSuite(test as any)
