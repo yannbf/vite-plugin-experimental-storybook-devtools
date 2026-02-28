@@ -82,4 +82,5 @@ test.describe('Vue playground detection coverage', () => {
 registerCommonHighlighterSuite(test as any, {
   framework: 'vue',
   targetComponent: 'TaskList',
+  interactionComponent: 'Form',
 })
