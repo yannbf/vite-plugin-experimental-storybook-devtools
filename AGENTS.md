@@ -2,6 +2,8 @@
 
 Guidance for AI coding agents working in this repository.
 
+Read `docs/ARCHITECTURE.md` early for implementation/refactor tasks.
+
 ## Goals
 
 - Ship minimal, correct changes.
@@ -35,9 +37,11 @@ Guidance for AI coding agents working in this repository.
    - Keep E2E activation deterministic (automation hooks + config).
 
 6. **Do not leave docs stale**
-   - If you change architecture, testing strategy, or workflow, update:
+   - If you change architecture, testing strategy, workflow, or framework behavior, update:
      - `AGENTS.md`
      - `docs/AGENT_PLAYBOOK.md`
+     - `docs/ARCHITECTURE.md`
+     - `docs/SUPPORTED_FRAMEWORKS.md` (if framework list changed)
      - PR checklist/template if needed
 
 ## Required Validation Before Handoff

@@ -64,4 +64,6 @@ Minimum docs to review each PR:
 
 - `AGENTS.md`
 - `docs/AGENT_PLAYBOOK.md`
+- `docs/ARCHITECTURE.md`
+- `docs/SUPPORTED_FRAMEWORKS.md` (when framework support changes)
 - `.github/pull_request_template.md`
