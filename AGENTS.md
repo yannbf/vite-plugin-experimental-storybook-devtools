@@ -44,8 +44,8 @@ Guidance for AI coding agents working in this repository.
 Run relevant checks (at minimum):
 
 ```bash
-corepack pnpm test tests/frameworks/react/playground-story-generation.test.ts tests/frameworks/vue/playground-story-generation.test.ts
-corepack pnpm exec playwright test e2e/playground-react-detection.spec.ts e2e/playground-vue-detection.spec.ts
+pnpm test tests/frameworks/react/playground-story-generation.test.ts tests/frameworks/vue/playground-story-generation.test.ts
+pnpm exec playwright test e2e/playground-react-detection.spec.ts e2e/playground-vue-detection.spec.ts
 ```
 
 If you touch broader behavior, run the full test set impacted by your changes.
