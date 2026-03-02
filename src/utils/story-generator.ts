@@ -77,7 +77,9 @@ export function getRelativeImportPath(
   fromDir: string,
   toFilePath: string,
 ): string {
-  const relativePath = path.relative(fromDir, toFilePath)
+  const relativePath = path
+    .relative(fromDir, toFilePath)
+    .replace(/\.(tsx?|jsx?)$/i, '')
   if (!relativePath.startsWith('.')) {
     return `./${relativePath}`
   }
@@ -309,7 +311,7 @@ export function replaceFunctionHandlersInJSX(jsxSource: string): string {
     const functionPatterns = [
       /^\([^)]*\)\s*=>/,
       /^async\s*\([^)]*\)\s*=>/,
-      /^function\s*\(/,
+      /^function(?:\s+\w+)?\s*\(/,
       /^[\w.]+\([^)]*\)/,
     ]
 
@@ -383,7 +385,7 @@ export function hasFunctionHandlersInJSX(jsxSource: string): boolean {
     const functionPatterns = [
       /^\([^)]*\)\s*=>/,
       /^async\s*\([^)]*\)\s*=>/,
-      /^function\s*\(/,
+      /^function(?:\s+\w+)?\s*\(/,
       /^[\w.]+\([^)]*\)/,
     ]
 

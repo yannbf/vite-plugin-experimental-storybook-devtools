@@ -336,15 +336,17 @@ export function createComponentHighlighterPlugin(
                       data.meta.filePath,
                       path.extname(data.meta.filePath),
                     )
+                    const storyExtension =
+                      framework.name === 'vue' ? 'ts' : 'tsx'
                     let outputPath = path.join(
                       componentDir,
-                      `${componentFileName}.stories.tsx`,
+                      `${componentFileName}.stories.${storyExtension}`,
                     )
                     if (storiesDir) {
                       outputPath = path.join(
                         componentDir,
                         storiesDir,
-                        `${componentFileName}.stories.tsx`,
+                        `${componentFileName}.stories.${storyExtension}`,
                       )
                     }
 
