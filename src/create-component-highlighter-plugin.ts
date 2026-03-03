@@ -16,6 +16,16 @@ declare module '@vitejs/devtools-kit' {
     'component-highlighter:toggle-overlay': (data: { enabled: boolean }) => void
     'component-highlighter:create-story': (data: ComponentStoryData) => void
   }
+
+  interface DevToolsRpcClientFunctions {
+    'component-highlighter:story-created': (data: {
+      filePath: string
+      componentName: string
+      componentPath?: string
+      storyName?: string
+      isAppend?: boolean
+    }) => void
+  }
 }
 
 interface ComponentHighlightData {
@@ -159,6 +169,8 @@ export function createComponentHighlighterPlugin(
   const filter = createFilter(include, exclude)
   let isServe = false
   let server: ViteDevServer | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let devtoolsCtx: any | undefined
 
   return {
     name: 'vite-plugin-experimental-storybook-devtools',
@@ -258,6 +270,7 @@ export function createComponentHighlighterPlugin(
     },
     devtools: {
       setup(ctx) {
+        devtoolsCtx = ctx
         // Register dock entry for component highlighter UI
         ctx.docks.register({
           id: devtoolsDockId,
@@ -416,19 +429,20 @@ export function createComponentHighlighterPlugin(
                       `[DevTools] Story "${story.storyName}" ${existingContent ? 'added to' : 'created in'}: ${outputPath}`,
                     )
 
-                    // Notify the client about the created file
-                    if (server) {
-                      server.ws.send({
-                        type: 'custom',
-                        event: 'component-highlighter:story-created',
-                        data: {
+                    // Notify the client about the created file via RPC broadcast.
+                    // This calls the registered 'component-highlighter:story-created'
+                    // client function on all connected DevTools clients.
+                    if (devtoolsCtx) {
+                      devtoolsCtx.rpc.broadcast(
+                        'component-highlighter:story-created',
+                        {
                           filePath: outputPath,
                           componentName: data.meta.componentName,
                           componentPath: data.meta.filePath,
                           storyName: story.storyName,
                           isAppend: !!existingContent,
                         },
-                      })
+                      )
                     }
                   } catch (error) {
                     console.error('[DevTools] Failed to create story:', error)

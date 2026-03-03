@@ -38,3 +38,10 @@ export {
   analyzeAppProviders,
   analyzeComponentFile,
 } from './utils/provider-analyzer'
+
+// Transport abstraction (for integrating outside of Vite DevTools)
+export type {
+  HighlighterTransport,
+  CreateStoryPayload,
+  StoryCreatedPayload,
+} from './client/transport'
