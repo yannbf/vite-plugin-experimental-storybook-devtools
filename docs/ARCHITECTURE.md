@@ -14,7 +14,7 @@ See `docs/SUPPORTED_FRAMEWORKS.md` for the current framework list.
 
 ## Runtime flow (end-to-end)
 
-1. **Vite plugin setup** (`src/create-component-highlighter-plugin.ts`)
+1. **Vite plugin setup** (`src/create-plugin.ts`)
    - Registers transform hooks
    - Registers DevTools dock integration
    - Exposes server endpoints / RPC for story operations
@@ -28,7 +28,7 @@ See `docs/SUPPORTED_FRAMEWORKS.md` for the current framework list.
    - Tracks props/serialized props + DOM anchor elements
    - Emits register/update/unregister events
 
-4. **Overlay + listeners** (`src/client/listeners.ts`, `src/client/overlay.ts`)
+4. **Overlay + listeners** (`src/client-component-highlighter/listeners.ts`, `src/client-component-highlighter/overlay.ts`)
    - Renders highlights
    - Handles hover/click/context-menu interactions
    - Triggers story creation requests (save / save-with-interactions)
@@ -52,10 +52,10 @@ See `docs/SUPPORTED_FRAMEWORKS.md` for the current framework list.
 - `src/runtime-helpers.ts`
   - Shared runtime tracking helpers used across frameworks.
 
-- `src/client/listeners.ts`
+- `src/client-component-highlighter/listeners.ts`
   - Event wiring + highlighter activation state.
 
-- `src/client/overlay.ts`
+- `src/client-component-highlighter/overlay.ts`
   - Highlight UI, context menu, save actions, interaction-mode UX.
 
 - `src/frameworks/<framework>/story-generator.ts`

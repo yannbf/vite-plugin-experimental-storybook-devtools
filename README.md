@@ -75,12 +75,12 @@ Once the dock is active:
 
 ### Highlight Modes
 
-| Mode | Trigger | Description |
-|------|---------|-------------|
-| **Hover** | Mouse over | Shows tooltip for single component |
-| **Highlight All** | Hold `Alt` | Shows all components with debug overlay |
-| **Toggle Sticky** | `Shift + H` | Keeps highlight-all mode active |
-| **Dismiss** | `Escape` | Closes context menu or selection |
+| Mode              | Trigger     | Description                             |
+| ----------------- | ----------- | --------------------------------------- |
+| **Hover**         | Mouse over  | Shows tooltip for single component      |
+| **Highlight All** | Hold `Alt`  | Shows all components with debug overlay |
+| **Toggle Sticky** | `Shift + H` | Keeps highlight-all mode active         |
+| **Dismiss**       | `Escape`    | Closes context menu or selection        |
 
 ### Highlight Colors
 
@@ -171,14 +171,14 @@ export const Primary: Story = {
 
 ### Supported Prop Types
 
-| Type | Example | Generated Code |
-|------|---------|----------------|
-| Primitives | `"hello"`, `42`, `true` | `"hello"`, `42`, `true` |
-| Objects | `{ nested: { value: 1 } }` | `{ nested: { value: 1 } }` |
-| Arrays | `[1, 2, 3]` | `[1, 2, 3]` |
-| JSX Elements | `<Icon />` | `<Icon />` (with import) |
-| JSX Children | `<>Hello <Button /></>` | `<>Hello <Button /></>` |
-| Functions | `onClick={handleClick}` | `fn()` (with import) |
+| Type         | Example                    | Generated Code             |
+| ------------ | -------------------------- | -------------------------- |
+| Primitives   | `"hello"`, `42`, `true`    | `"hello"`, `42`, `true`    |
+| Objects      | `{ nested: { value: 1 } }` | `{ nested: { value: 1 } }` |
+| Arrays       | `[1, 2, 3]`                | `[1, 2, 3]`                |
+| JSX Elements | `<Icon />`                 | `<Icon />` (with import)   |
+| JSX Children | `<>Hello <Button /></>`    | `<>Hello <Button /></>`    |
+| Functions    | `onClick={handleClick}`    | `fn()` (with import)       |
 
 ## 🔍 Debug Overlay
 
@@ -254,7 +254,7 @@ pnpm typecheck
 ```
 ├── src/
 │   ├── index.ts                               # Package entry
-│   ├── create-component-highlighter-plugin.ts # Main Vite plugin
+│   ├── create-plugin.ts                       # Main Vite plugin
 │   ├── runtime-helpers.ts                     # Shared runtime utilities
 │   ├── frameworks/
 │   │   ├── types.ts                           # Shared framework interfaces
@@ -270,10 +270,12 @@ pnpm typecheck
 │   │       ├── transform.ts                   # Vue SFC transformation
 │   │       ├── runtime-module.ts              # Runtime wrapper (Vue)
 │   │       └── story-generator.ts             # Vue story generation
-│   ├── client/
+│   ├── client-component-highlighter/
 │   │   ├── overlay.ts                         # UI overlay
 │   │   ├── listeners.ts                       # Event handlers
 │   │   └── vite-devtools.ts                   # DevTools dock
+│   ├── client-storybook-iframe/
+│   │   ├── TODO.TODO.TODO
 │   └── utils/
 │       ├── story-generator.ts                 # Shared story utilities
 │       └── provider-analyzer.ts               # Provider detection
@@ -346,11 +348,11 @@ The analyzer scans your app entry point and logs detected providers with decorat
 
 ### Keyboard Shortcuts Reference
 
-| Shortcut | Action |
-|----------|--------|
+| Shortcut     | Action                                        |
+| ------------ | --------------------------------------------- |
 | `Alt` (hold) | Show all component highlights + debug overlay |
-| `Shift + H` | Toggle sticky highlight-all mode |
-| `Escape` | Dismiss context menu / clear selection |
+| `Shift + H`  | Toggle sticky highlight-all mode              |
+| `Escape`     | Dismiss context menu / clear selection        |
 
 ### Troubleshooting
 

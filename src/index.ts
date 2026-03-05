@@ -9,9 +9,9 @@
 
 // Core plugin factory (for advanced use cases)
 export {
-  createComponentHighlighterPlugin,
+  createPlugin as createComponentHighlighterPlugin,
   type ComponentHighlighterOptions,
-} from './create-component-highlighter-plugin'
+} from './create-plugin'
 
 // Story generator
 export { generateStoryName } from './utils/story-generator'

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "Vue playground for vite-plugin-experimental-storybook-devtools",
   "scripts": {
-    "dev": "vite",
+    "dev": "IN_STORYBOOK_DEVTOOLS_REPO=true vite",
     "build": "vite build",
     "test": "vitest run",
     "storybook": "STORYBOOK=true storybook dev -p 6006",

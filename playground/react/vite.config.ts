@@ -36,14 +36,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'vite-plugin-experimental-storybook-devtools/client/listeners': r(
-        '../../src/client/listeners.ts',
+      'vite-plugin-experimental-storybook-devtools/client-component-highlighter/listeners': r(
+        '../../src/client-component-highlighter/listeners.ts',
       ),
-      'vite-plugin-experimental-storybook-devtools/client/overlay': r(
-        '../../src/client/overlay.ts',
+      'vite-plugin-experimental-storybook-devtools/client-component-highlighter/overlay': r(
+        '../../src/client-component-highlighter/overlay.ts',
       ),
-      'vite-plugin-experimental-storybook-devtools/client/vite-devtools': r(
-        '../../src/client/vite-devtools.ts',
+      'vite-plugin-experimental-storybook-devtools/client-component-highlighter/vite-devtools': r(
+        '../../src/client-component-highlighter/vite-devtools.ts',
       ),
     },
   },

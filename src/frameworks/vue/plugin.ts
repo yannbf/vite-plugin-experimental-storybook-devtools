@@ -8,9 +8,9 @@
  */
 
 import {
-  createComponentHighlighterPlugin,
+  createPlugin,
   type ComponentHighlighterOptions,
-} from '../../create-component-highlighter-plugin'
+} from '../../create-plugin'
 import { vueFramework } from '.'
 
 /**
@@ -36,9 +36,9 @@ import { vueFramework } from '.'
 export default function componentHighlighterVue(
   options: ComponentHighlighterOptions = {},
 ) {
-  return createComponentHighlighterPlugin(vueFramework, options)
+  return createPlugin(vueFramework, options)
 }
 
 // Re-export types
-export type { ComponentHighlighterOptions } from '../../create-component-highlighter-plugin'
+export type { ComponentHighlighterOptions } from '../../create-plugin'
 export { vueFramework } from '.'

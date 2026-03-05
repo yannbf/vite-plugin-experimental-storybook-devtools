@@ -5,8 +5,8 @@ import { App } from './App'
 import './style.css'
 
 // Load component highlighter client modules
-import 'vite-plugin-experimental-storybook-devtools/client/listeners'
-import 'vite-plugin-experimental-storybook-devtools/client/overlay'
+import 'vite-plugin-experimental-storybook-devtools/client-component-highlighter/listeners'
+import 'vite-plugin-experimental-storybook-devtools/client-component-highlighter/overlay'
 
 createRoot(document.querySelector('#app')!).render(
   <StrictMode>

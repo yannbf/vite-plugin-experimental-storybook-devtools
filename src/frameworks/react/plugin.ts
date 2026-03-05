@@ -7,7 +7,7 @@
  * ```
  */
 
-import { createComponentHighlighterPlugin, type ComponentHighlighterOptions } from '../../create-component-highlighter-plugin'
+import { createPlugin, type ComponentHighlighterOptions } from '../../create-plugin'
 import { reactFramework } from '.'
 
 /**
@@ -31,10 +31,10 @@ import { reactFramework } from '.'
  * ```
  */
 export default function componentHighlighterReact(options: ComponentHighlighterOptions = {}) {
-  return createComponentHighlighterPlugin(reactFramework, options)
+  return createPlugin(reactFramework, options)
 }
 
 // Re-export types
-export type { ComponentHighlighterOptions } from '../../create-component-highlighter-plugin'
+export type { ComponentHighlighterOptions } from '../../create-plugin'
 export { reactFramework } from '.'
 

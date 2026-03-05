@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, defineComponent, h, ref, type DefineComponent } from 'vue'
 import Header from './components/Header.vue'
 import Button from './components/Button.vue'
 import TaskCard from './components/TaskCard.vue'
@@ -20,6 +20,20 @@ interface Task {
     }
   }
 }
+
+const MyLocalComponent = defineComponent({
+  name: 'MyLocalComponent',
+  render: (ctx) => h(
+    'div',
+    {
+      style: {
+        border: '1px solid blue',
+        padding: '8px',
+      },
+    },
+    ctx.$slots.default?.()
+  )
+})
 
 const initialTasks: Task[] = [
   {
@@ -121,6 +135,8 @@ const completedCount = computed(
       </div>
 
       <TaskList title="All Tasks" :count="tasks.length">
+        <div style="border: 1px solid orange; padding: 8px;">This is some static HTML.</div>
+        <MyLocalComponent>This is a local, unexported component.</MyLocalComponent>
         <TaskCard
           v-for="task in tasks"
           :key="task.id"

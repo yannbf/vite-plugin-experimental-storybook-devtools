@@ -1,10 +1,16 @@
+packages:
+  - packages/*
+  - playground/*
+
+catalog:
+  '@vitejs/plugin-react': ^5.1.2
+  npm-run-all2: ^8.0.4
+  sirv: ^3.0.2
 
 catalogMode: prefer
 
 ignoreWorkspaceRootCheck: true
+
 shellEmulator: true
 
 trustPolicy: no-downgrade
-
-packages:
-  - playground/*

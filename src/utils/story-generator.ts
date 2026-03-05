@@ -6,6 +6,8 @@ import type {
 } from '../frameworks/types'
 import * as path from 'path'
 
+import type { VNode } from 'vue';
+
 // Re-export types for consumers
 export type { SerializedProps, JSXSerializedValue, FunctionSerializedValue }
 

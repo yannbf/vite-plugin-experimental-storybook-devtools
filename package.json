@@ -27,22 +27,28 @@
       "default": "./dist/frameworks/vue/plugin.mjs"
     },
     "./package.json": "./package.json",
-    "./client/overlay": "./dist/client/overlay.mjs",
-    "./client/listeners": "./dist/client/listeners.mjs",
-    "./client/vite-devtools": "./dist/client/vite-devtools.mjs"
+    "./client-component-highlighter/overlay": "./dist/client-component-highlighter/overlay.mjs",
+    "./client-component-highlighter/listeners": "./dist/client-component-highlighter/listeners.mjs",
+    "./client-component-highlighter/vite-devtools": "./dist/client-component-highlighter/vite-devtools.mjs",
+    "./client-iframe": "./packages/client-iframe/dist/index.html"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "files": [
-    "dist"
+    "dist",
+    "packages/client-iframe/dist"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "pnpm run build:client-iframe && pnpm run build:plugin",
+    "build:client-iframe": "cd packages/client-iframe && vite build",
+    "build:plugin": "tsdown",
+    "dev": "npm-run-all --parallel dev:client-iframe dev:plugin",
+    "dev:client-iframe": "cd packages/client-iframe && vite",
+    "dev:plugin": "tsdown --watch",
     "play": "vite",
     "test": "vitest",
     "e2e": "playwright test",
@@ -59,12 +65,15 @@
     "@types/node": "^25.0.3",
     "@vitejs/devtools": "0.0.0-alpha.32",
     "@vitejs/devtools-kit": "0.0.0-alpha.32",
+    "@vitejs/plugin-react": "catalog:",
     "@vitest/browser-playwright": "^4.0.16",
     "@vitest/coverage-v8": "4.0.17",
     "@vue/compiler-sfc": "^3.5.28",
     "bumpp": "^10.3.2",
+    "npm-run-all2": "catalog:",
     "pkg-pr-new": "^0.0.62",
     "playwright": "^1.57.0",
+    "sirv": "catalog:",
     "tsdown": "^0.18.1",
     "typescript": "^5.9.3",
     "vite": "^8.0.0-beta.14",

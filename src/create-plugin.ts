@@ -101,10 +101,12 @@ export interface ComponentHighlighterOptions {
   storiesDir?: string
 }
 
+const STORYBOOK_IFRAME_WRAPPER_URL = '/client-iframe'
+const STORYBOOK_IFRAME_WRAPPER_DEV_URL = 'http://localhost:6005'
 /**
- * Create the component highlighter plugin for a specific framework
+ * Create the Storybook plugin for a specific framework
  */
-export function createComponentHighlighterPlugin(
+export function createPlugin(
   framework: FrameworkConfig,
   options: ComponentHighlighterOptions = {},
 ): Plugin {
@@ -160,6 +162,21 @@ export function createComponentHighlighterPlugin(
   let isServe = false
   let server: ViteDevServer | undefined
 
+  // TODO review this logic and use it instead of clientPath under
+  if (process.env["IN_STORYBOOK_DEVTOOLS_REPO"] && process.env["IN_STORYBOOK_DEVTOOLS_REPO"] !== "false" && process.env["IN_STORYBOOK_DEVTOOLS_REPO"] !== "0") {
+    process.stdout.write('[DevTools] Running in development mode with local client-iframe\n')
+    // process.exit(10); // TODO DEBUG
+  } else {
+    process.exit(20); // TODO DEBUG
+  }
+
+
+  // todo veryify paths on build
+  const clientPath = path.join(packageRoot, 'packages', 'client-iframe', 'dist', 'index.html')
+  const isProductionBuild = fs.existsSync(clientPath);
+  // TEMP DEBUG
+  process.stdout.write(`[DevTools] Running in production mode? ${isProductionBuild}\n`)
+
   return {
     name: 'vite-plugin-experimental-storybook-devtools',
     enforce: 'pre',
@@ -172,8 +189,19 @@ export function createComponentHighlighterPlugin(
       viteConfig.optimizeDeps.include.push(
         'react-element-to-jsx-string/dist/esm/index.js',
       )
+      // TODO fix bug
+      // In development, redirect to the dev server for the iframe wrappe
+      if (!isProductionBuild){
+        viteConfig.server ??= {}
+        viteConfig.server.proxy ??= {}
+        viteConfig.server.proxy[STORYBOOK_IFRAME_WRAPPER_URL] = {
+          target: STORYBOOK_IFRAME_WRAPPER_DEV_URL,
+          changeOrigin: true,
+          //rewrite: (path) => path.replace(STORYBOOK_IFRAME_WRAPPER_URL, '/'),
+        }
+      }
     },
-    configureServer(srv) {
+    async configureServer(srv) {
       server = srv
 
       if (fs.existsSync(runtimeHelperSourcePath)) {
@@ -181,6 +209,24 @@ export function createComponentHighlighterPlugin(
       }
       if (fs.existsSync(runtimeModuleSourcePath)) {
         srv.watcher.add(runtimeModuleSourcePath)
+      }
+
+      // TODO fix bug
+      // In production, serve the pre-built iframe wrapper using sirv.
+      if (isProductionBuild) {
+        try {
+          const sirv = await import('sirv').then((mod) => mod.default || mod)
+          srv.middlewares.use(
+            STORYBOOK_IFRAME_WRAPPER_URL,
+            sirv(clientPath, { dev: isServe }),
+          )
+        }catch{
+          // todo error handling
+        }
+      } else {
+        // In development, run a small Vite dev server to build the iframe wrapper on the fly, and proxy requests to it.
+        // TODO: if local, add a dev server to build the client-iframe wrapper, and sirv to specific URL
+        // we sirv to STORYBOOK_IFRAME_WRAPPER_URL in both cases
       }
 
       // Add middleware to check if story files exist
@@ -258,6 +304,9 @@ export function createComponentHighlighterPlugin(
     },
     devtools: {
       setup(ctx) {
+
+        
+
         // Register dock entry for component highlighter UI
         ctx.docks.register({
           id: devtoolsDockId,
@@ -266,7 +315,7 @@ export function createComponentHighlighterPlugin(
           type: 'action',
           action: {
             importFrom:
-              'vite-plugin-experimental-storybook-devtools/client/vite-devtools',
+              'vite-plugin-experimental-storybook-devtools/client-component-highlighter/vite-devtools',
             importName: 'default',
           },
         })
@@ -276,7 +325,7 @@ export function createComponentHighlighterPlugin(
           title: 'Storybook',
           icon: 'https://avatars.githubusercontent.com/u/22632046',
           type: 'iframe',
-          url: storybookUrl,
+          url: STORYBOOK_IFRAME_WRAPPER_URL + '?storybookUrl=' + encodeURIComponent(storybookUrl),
         })
 
         // Register RPC functions for communication with the client
